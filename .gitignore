@@ -4,7 +4,7 @@ sfe-prod-*.json
 *service-account*.json
 *credentials*.json
 
-# Datos sensibles de clientes / puntos de venta (no se suben al repo publico)
+# Datos sensibles de clientes / puntos de venta
 MAESTRO PDV's.xlsx
 MAESTRO PDV's_con_brick.xlsx
 Apps Script/datos_sheets/
@@ -12,8 +12,25 @@ Apps Script/datos_sheets/
 # Python
 __pycache__/
 *.pyc
+*.py[cod]
 
-# Claude Code local settings
+# Entorno virtual
+.venv/
+venv/
+
+# Configuración local (rutas del equipo, no se comparte)
+config.py
+
+# Salida del ETL (datos, no código)
+salida/
+so_*.json
+
+# Archivos de datos pesados
+*.xlsx
+*.xlsm
+*.xls
+
+# Claude Code local
 .claude/settings.local.json
 
 # OS
