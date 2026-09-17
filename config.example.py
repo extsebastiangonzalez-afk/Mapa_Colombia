@@ -30,7 +30,7 @@ CARPETA_SALIDA = r"G:\Mi unidad\ISDIN\Sell Out\datos_web"
 # ---------------------------------------------------------------------------
 
 # Nombre de la hoja con los datos. None = primera hoja del libro.
-NOMBRE_HOJA = None
+NOMBRE_HOJA = "Final"
 
 # Número de fila (empezando en 1) donde están los encabezados.
 # Todas las filas posteriores se tratan como datos.
@@ -70,9 +70,10 @@ COLUMNAS = {
     # Unidad de negocio (BU).
     "bu": ["bu", "business unit", "unidad de negocio", "unidad negocio"],
     # Código del producto.
-    "sku": ["sku", "cod producto", "codigo producto", "material", "cod material", "ean"],
+    "sku": ["sku", "ean isdin", "cod producto", "codigo producto", "material", "cod material", "ean"],
     # Descripción del producto.
-    "prod_desc": ["prod_desc", "prod desc", "desc producto", "descripcion producto", "producto", "descripcion"],
+    "prod_desc": ["prod_desc", "prod desc", "ean description", "desc producto", "descripcion producto",
+                  "producto", "descripcion", "description"],
     # Familia o marca del producto.
     "familia": ["familia", "family", "marca", "brand"],
     # Unidades vendidas.
@@ -84,3 +85,35 @@ COLUMNAS = {
 # Campos sin los cuales una fila se descarta (se cuentan en so_manifiesto.json).
 # "fecha" y "pos_id" son siempre necesarios aunque se quiten de esta lista.
 OBLIGATORIOS = ["fecha", "pos_id", "amount"]
+
+# ---------------------------------------------------------------------------
+# Filtros de filas
+# ---------------------------------------------------------------------------
+# Solo se procesan las filas cuyo valor en cada columna esté en la lista.
+# La columna se busca igual que en COLUMNAS (encabezado o fragmento) y los
+# valores se comparan sin distinguir mayúsculas ni tildes. {} = sin filtros.
+# La hoja "Final" trae Colombia (COP) y Panamá (USD): aquí se deja solo Colombia.
+FILTROS = {
+    "affiliate": ["Colombia"],
+}
+
+# ---------------------------------------------------------------------------
+# Dimensión de productos
+# ---------------------------------------------------------------------------
+# Tabla de productos (otra hoja del mismo libro) que completa bu, prod_desc y
+# familia cruzando por sku. Solo rellena los campos que la fila de venta trae
+# vacíos. Si un código aparece repetido, se usa su primera fila.
+# None = no se usa.
+#   hoja:             nombre de la hoja
+#   fila_encabezados: fila (desde 1) de los encabezados de esa hoja
+#   clave:            candidatos para la columna que contiene el sku (EAN)
+#   campos:           campo del ETL -> candidatos para su columna
+# "SUB FAMILIA" (DERMA, FOTO, ISDINCEUTICS, PLAT. WATER, OTRO) se usa como BU.
+DIMENSION_PRODUCTOS = {
+    "hoja": "DIM Productos",
+    "fila_encabezados": 1,
+    "clave": ["isdin ean", "ean"],
+    "campos": {
+        "bu": ["sub familia"],
+    },
+}

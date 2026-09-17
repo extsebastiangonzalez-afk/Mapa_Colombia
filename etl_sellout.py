@@ -15,6 +15,10 @@ deja en CARPETA_SALIDA los JSON que consume la web app:
 Las series usan tripletas compactas [índiceMes, unidades, importe], donde
 índiceMes es la posición del mes en la lista "meses" del mismo archivo.
 
+Opcionalmente, FILTROS deja pasar solo ciertas filas (p. ej. Affiliate = Colombia)
+y DIMENSION_PRODUCTOS completa bu / prod_desc / familia cruzando el SKU con una
+tabla de productos de otra hoja del mismo libro.
+
 Uso:
   python etl_sellout.py --inspect       revisa hojas, encabezados y mapeo
   python etl_sellout.py                 corrida completa
@@ -345,7 +349,102 @@ def normalizar_campo(campo, valor):
         return normalizar_codigo(valor)
     if campo in CAMPOS_NUMERO:
         return normalizar_numero(valor)
+    if campo == "bu":
+        return normalizar_texto(valor).upper()
     return normalizar_texto(valor)
+
+
+# ---------------------------------------------------------------------------
+# Filtros de filas y dimensión de productos
+# ---------------------------------------------------------------------------
+
+CAMPOS_DIMENSION = ("bu", "prod_desc", "familia")
+
+
+def buscar_columna(encabezados, candidatos):
+    """Índice 0-based de la columna que coincide con algún candidato, o None."""
+    return mapear_columnas(encabezados, {"columna": candidatos}).get("columna")
+
+
+def preparar_filtros(cfg, encabezados):
+    """Devuelve (filtros, columnas no encontradas). Cada filtro es una tupla
+    (índice, encabezado, valores aceptados normalizados, valores tal cual en config)."""
+    filtros, faltan = [], []
+    for columna, aceptados in (getattr(cfg, "FILTROS", None) or {}).items():
+        indice = buscar_columna(encabezados, [columna])
+        if indice is None:
+            faltan.append(columna)
+        else:
+            filtros.append((indice, encabezados[indice],
+                            {normalizar_encabezado(v) for v in aceptados}, list(aceptados)))
+    return filtros, faltan
+
+
+def pasa_filtros(fila, filtros, cache):
+    """True si la fila cumple todos los filtros (sin distinguir mayúsculas ni tildes).
+    `cache` guarda el valor normalizado de cada celda ya vista."""
+    for indice, _, aceptados, _ in filtros:
+        valor = celda(fila, indice)
+        clave = cache.get(valor)
+        if clave is None:
+            if len(cache) > 10_000:
+                cache.clear()
+            clave = cache[valor] = normalizar_encabezado(normalizar_texto(valor))
+        if clave not in aceptados:
+            return False
+    return True
+
+
+def cargar_dimension_productos(cfg, libro):
+    """Lee la tabla de DIMENSION_PRODUCTOS. Devuelve (productos, info), donde
+    productos es {sku: {campo: valor}}; ({}, None) si está desactivada."""
+    dim = getattr(cfg, "DIMENSION_PRODUCTOS", None)
+    if not dim:
+        return {}, None
+    sobran = set(dim["campos"]) - set(CAMPOS_DIMENSION)
+    if sobran:
+        sys.exit(f"ERROR: DIMENSION_PRODUCTOS solo puede completar {', '.join(CAMPOS_DIMENSION)}; "
+                 f"sobran: {', '.join(sorted(sobran))}.")
+
+    hoja = libro.elegir_hoja(dim["hoja"])
+    encabezados, filas = leer_encabezados(libro, hoja, int(dim.get("fila_encabezados", 1)))
+    columnas = mapear_columnas(encabezados, {"clave": dim["clave"], **dim["campos"]})
+    faltan = [c for c in ("clave", *dim["campos"]) if c not in columnas]
+    if faltan:
+        sys.exit(f"ERROR: DIMENSION_PRODUCTOS: en la hoja '{hoja}' no se encontraron columnas "
+                 f"para: {', '.join(faltan)}.\n  Encabezados de la hoja: {encabezados}")
+
+    i_clave = columnas.pop("clave")
+    productos, repetidos = {}, set()
+    for fila in filas:
+        sku = normalizar_codigo(celda(fila, i_clave))
+        if not sku:
+            continue
+        if sku in productos:
+            repetidos.add(sku)  # gana la primera fila
+            continue
+        productos[sku] = {campo: normalizar_campo(campo, celda(fila, i))
+                          for campo, i in columnas.items()}
+    info = {
+        "hoja": hoja,
+        "clave": encabezados[i_clave],
+        "columnas": {campo: encabezados[i] for campo, i in columnas.items()},
+        "productos": len(productos),
+        "repetidos": sorted(repetidos),
+    }
+    return productos, info
+
+
+def completar_con_dimension(valores, productos):
+    """Rellena los campos vacíos de la fila con los de la dimensión.
+    Devuelve False si el SKU no está en la dimensión."""
+    datos = productos.get(valores.get("sku"))
+    if datos is None:
+        return False
+    for campo, valor in datos.items():
+        if not valores.get(campo):
+            valores[campo] = valor
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +464,7 @@ def inspeccionar(cfg):
         for nombre in libro.hojas:
             print(f"  {'->' if nombre == hoja else '  '} {nombre}")
 
+        productos, info_dim = cargar_dimension_productos(cfg, libro)
         encabezados, filas = leer_encabezados(libro, hoja, fila_enc)
         print(f"\nEncabezados de '{hoja}' (fila {fila_enc}):")
         for numero, encabezado in enumerate(encabezados, start=1):
@@ -388,10 +488,32 @@ def inspeccionar(cfg):
             print(f"\nATENCIÓN: faltan campos obligatorios: {', '.join(faltan)}. "
                   "Agrega fragmentos a COLUMNAS en config.py.")
 
-        print("\nPrimeras 3 filas de datos:")
-        mostradas = 0
+        filtros, faltan_filtros = preparar_filtros(cfg, encabezados)
+        print("\nFiltros de filas:")
+        if not filtros and not faltan_filtros:
+            print("  (sin filtros: se procesan todas las filas)")
+        for indice, encabezado, _, aceptados in filtros:
+            print(f"  columna {indice + 1} ({letra_columna(indice + 1)}) '{encabezado}' "
+                  f"debe ser: {', '.join(map(str, aceptados))}")
+        for columna in faltan_filtros:
+            print(f"  ATENCIÓN: no se encontró la columna del filtro '{columna}'. Revisa FILTROS.")
+
+        print("\nDimensión de productos:")
+        if info_dim is None:
+            print("  (desactivada)")
+        else:
+            print(f"  hoja '{info_dim['hoja']}': {info_dim['productos']:,} productos, "
+                  f"cruce del sku con la columna '{info_dim['clave']}'")
+            for campo, encabezado in info_dim["columnas"].items():
+                print(f"    {campo:<10} <- '{encabezado}' (solo si la venta lo trae vacío)")
+            if info_dim["repetidos"]:
+                print(f"  {len(info_dim['repetidos'])} códigos repetidos (se usa la primera fila): "
+                      + ", ".join(info_dim["repetidos"]))
+
+        print("\nPrimeras 3 filas de datos" + (" que pasan los filtros:" if filtros else ":"))
+        mostradas, cache = 0, {}
         for n, fila in enumerate(filas, start=fila_enc + 1):
-            if fila_vacia(fila):
+            if fila_vacia(fila) or not pasa_filtros(fila, filtros, cache):
                 continue
             mostradas += 1
             print(f"\n  Fila {n}:")
@@ -399,13 +521,22 @@ def inspeccionar(cfg):
                 if valor is not None and str(valor).strip():
                     nombre = encabezados[i] if i < len(encabezados) else ""
                     print(f"    {i + 1:>4}  {nombre[:30]:<30}  {valor!r}")
+            valores = {campo: normalizar_campo(campo, celda(fila, mapeo.get(campo)))
+                       for campo in cfg.COLUMNAS}
+            originales = dict(valores)
+            cruzo = completar_con_dimension(valores, productos) if productos else None
             print("    Normalizado:")
-            for campo, i in mapeo.items():
-                print(f"      {campo:<10} = {normalizar_campo(campo, celda(fila, i))!r}")
+            for campo in cfg.COLUMNAS:
+                completado = valores[campo] != originales[campo]
+                if campo in mapeo or completado:
+                    origen = f"   <- {info_dim['hoja']}" if completado else ""
+                    print(f"      {campo:<10} = {valores[campo]!r}{origen}")
+            if cruzo is False:
+                print(f"      (el sku no está en '{info_dim['hoja']}')")
             if mostradas == 3:
                 break
         if mostradas == 0:
-            print("  (la hoja no tiene filas de datos)")
+            print("  (no hay filas de datos" + (" que pasen los filtros)" if filtros else ")"))
 
 
 # ---------------------------------------------------------------------------
@@ -458,6 +589,7 @@ def ejecutar(cfg, limite):
     with abrir_libro(ruta) as libro:
         hoja = libro.elegir_hoja(getattr(cfg, "NOMBRE_HOJA", None))
         motor = libro.motor
+        productos, info_dim = cargar_dimension_productos(cfg, libro)
         encabezados, filas = leer_encabezados(libro, hoja, fila_enc)
         mapeo = mapear_columnas(encabezados, cfg.COLUMNAS)
 
@@ -465,20 +597,34 @@ def ejecutar(cfg, limite):
         if faltan:
             sys.exit(f"ERROR: no se encontraron columnas para: {', '.join(faltan)}.\n"
                      "  Revisa COLUMNAS en config.py con: python etl_sellout.py --inspect")
+        filtros, faltan_filtros = preparar_filtros(cfg, encabezados)
+        if faltan_filtros:
+            sys.exit(f"ERROR: no se encontraron las columnas de FILTROS: {', '.join(faltan_filtros)}.\n"
+                     "  Revisa FILTROS en config.py con: python etl_sellout.py --inspect")
 
         print(f"Leyendo '{hoja}' de {ruta.name} con {motor}"
               + (f" (límite: {limite:,} filas)" if limite else "") + " ...")
+        for _, encabezado, _, aceptados in filtros:
+            print(f"  Filtro: '{encabezado}' = {', '.join(map(str, aceptados))}")
+        if info_dim:
+            print(f"  Dimensión: {info_dim['productos']:,} productos de '{info_dim['hoja']}'")
 
         col = {campo: mapeo.get(campo) for campo in cfg.COLUMNAS}
         opcionales = ("amount", "units", "bu", "sku", "pdv_desc", "prod_desc", "familia")
         exigidos = [c for c in opcionales if c in obligatorios]
+        cache_filtros = {}
+        skus_sin_dimension = defaultdict(int)
 
         for fila in filas:
-            if limite is not None and conteo["leidas"] >= limite:
-                break
             if fila_vacia(fila):
                 conteo["vacias"] += 1
                 continue
+            if filtros and not pasa_filtros(fila, filtros, cache_filtros):
+                conteo["filtradas"] += 1
+                continue
+            # --limite cuenta solo filas que pasan los filtros.
+            if limite is not None and conteo["leidas"] >= limite:
+                break
             conteo["leidas"] += 1
             if conteo["leidas"] % CADA_N_FILAS == 0:
                 print(f"  {conteo['leidas']:,} filas ({time.perf_counter() - t0:.0f} s)")
@@ -501,6 +647,8 @@ def ejecutar(cfg, limite):
                 "prod_desc": normalizar_texto(celda(fila, col.get("prod_desc"))),
                 "familia": normalizar_texto(celda(fila, col.get("familia"))),
             }
+            if productos and valores["sku"] and not completar_con_dimension(valores, productos):
+                skus_sin_dimension[valores["sku"]] += 1
             faltante = next((c for c in exigidos if valores[c] in (None, "")), None)
             if faltante:
                 conteo[f"descartadas_{faltante}"] += 1
@@ -529,8 +677,9 @@ def ejecutar(cfg, limite):
             conteo["validas"] += 1
 
     t_lectura = time.perf_counter() - t0
-    print(f"Lectura terminada: {conteo['leidas']:,} filas, {conteo['validas']:,} válidas "
-          f"({t_lectura:.1f} s). Escribiendo JSON en {salida} ...")
+    print(f"Lectura terminada: {conteo['leidas']:,} filas, {conteo['validas']:,} válidas"
+          + (f", {conteo['filtradas']:,} excluidas por filtros" if filtros else "")
+          + f" ({t_lectura:.1f} s). Escribiendo JSON en {salida} ...")
 
     # índiceMes = posición en la lista ordenada de meses con datos.
     anios_mes = sorted({am for por_mes in por_sku.values() for am in por_mes})
@@ -596,6 +745,11 @@ def ejecutar(cfg, limite):
                     if campo in mapeo else None)
             for campo in cfg.COLUMNAS
         },
+        "filtros": {encabezado: aceptados for _, encabezado, _, aceptados in filtros},
+        "dimension_productos": (
+            dict(info_dim, skus_sin_cruce=dict(sorted(skus_sin_dimension.items())))
+            if info_dim else None
+        ),
         "filas": dict(sorted(conteo.items())),
         "conteos": {"pdv": len(so_pdv), "sku": len(so_portafolio),
                     "bu": len({bu for bus in por_pdv_bu.values() for bu in bus})},
@@ -616,6 +770,9 @@ def ejecutar(cfg, limite):
     if descartadas:
         print("  Filas descartadas por campo: "
               + ", ".join(f"{k}={v:,}" for k, v in sorted(descartadas.items())))
+    if skus_sin_dimension:
+        print(f"  {len(skus_sin_dimension)} SKU sin cruce en '{info_dim['hoja']}': "
+              + ", ".join(f"{s} ({n:,} filas)" for s, n in sorted(skus_sin_dimension.items())))
     print(f"  {len(archivos)} archivos JSON escritos en {salida}")
 
 
