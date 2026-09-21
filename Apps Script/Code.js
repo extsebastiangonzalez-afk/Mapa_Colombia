@@ -1,164 +1,265 @@
 /**
  * ============================================================
- * VISOR PDV + BRICKS + SELL OUT — Backend de la Web App
+ * VISOR COBERTURA ESTRATÉGICA — Backend (Code.gs)
  * ============================================================
- * Fuente de datos (un solo archivo, se abre por ID):
- *   • 'Bricks'                     -> polígonos GeoJSON de las zonas
- *   • 'CO_Puntos_Maestro clientes' -> maestro de PDV (Nº Oficina Farmacia,
- *                                     Potencial Cliente, coordenadas)
- *   • 'Sell Out 2026'              -> ventas: Fecha | POS_ID | ISDIN_PDV_DESC |
- *                                     BU | Units | Amount
+ * Lee los JSON que genera etl_sellout.py desde Drive y los sirve
+ * al frontend (Index.html).
  *
- * El cruce entre ventas y maestro es POS_ID <-> 'Nº Oficina Farmacia'.
+ * ARCHIVOS QUE CONSUME (carpeta _visor_json en Drive):
+ *   so_pdv.json          PDV × BU × mes        → base del mapa
+ *   so_portafolio.json   SKU × mes + catálogo  → panel de portafolio
+ *   so_indice.json       PDV → fragmento       → enrutador detalle por PDV
+ *   so_detalle_NN.json   PDV × SKU × mes       → portafolio de un PDV
+ *   so_sku_indice.json   SKU → fragmento       → enrutador análisis producto
+ *   so_sku_NN.json       SKU × PDV × mes       → distribución de un producto
+ *   so_manifiesto.json   metadatos             → diagnóstico
  *
- * Endpoints (devuelven STRINGS JSON; el cliente hace JSON.parse):
- *   getBricksJson() · getPuntosJson() · getVentasJson() · getDiagnosticoJson()
+ * CONFIGURACIÓN: solo hay que revisar CARPETA_JSON_ID y SPREADSHEET_ID.
+ *
+ * DESPUÉS DE CADA CORRIDA DEL ETL: ejecutar limpiarCache().
  */
+
+/* ============================================================
+ * CONFIGURACIÓN
+ * ============================================================ */
+
+var CARPETA_JSON_ID = '1Kg2WPunJtn-KjeNdhsEN4ojT6q00JPhm';
+var SPREADSHEET_ID  = '1fILFlz4cO4mmW-oOnhTuewCicoWJ8bzFUUAN30GaewI';
 
 var NOMBRE_HOJA_PUNTOS = 'CO_Puntos_Maestro clientes';
 var VISOR_HOJA_BRICKS  = 'Bricks';
-var NOMBRE_HOJA_VENTAS = 'Sell Out 2026';
 
-var SPREADSHEET_ID = '1fILFlz4cO4mmW-oOnhTuewCicoWJ8bzFUUAN30GaewI';
+var CACHE_SEGUNDOS   = 21600;   // 6 horas
+var CACHE_TROZO      = 90000;   // CacheService acepta 100 KB por clave
+var CACHE_MAX_TROZOS = 60;      // ~5.4 MB máximo por archivo
+
+/* ============================================================
+ * Entrada de la Web App
+ * ============================================================ */
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Cobertura Estratégica · ISDIN Colombia')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
 
 function abrirHoja_() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
 }
 
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-      .setTitle('Visor PDV + Bricks Colombia')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
 /* ============================================================
- * Utilidades compartidas
+ * Lectura de Drive con caché por trozos
  * ============================================================ */
 
-/** Convierte una celda a número. Tolera coma decimal, miles y espacios. */
-function parseNumero_(valor) {
-  if (valor === null || valor === undefined || valor === '') return NaN;
-  if (typeof valor === 'number') return valor;
-
-  var s = valor.toString().trim().replace(/\s+/g, '');
-  if (s === '') return NaN;
-
-  var tieneComa = s.indexOf(',') !== -1;
-  var tienePunto = s.indexOf('.') !== -1;
-
-  if (tieneComa && tienePunto) {
-    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
-      s = s.replace(/\./g, '').replace(/,/g, '.');
-    } else {
-      s = s.replace(/,/g, '');
-    }
-  } else if (tieneComa) {
-    var partes = s.split(',');
-    s = partes.shift() + '.' + partes.join('');
+function carpetaJson_() {
+  if (!CARPETA_JSON_ID || CARPETA_JSON_ID.indexOf('PEGAR') === 0) {
+    throw new Error('Falta configurar CARPETA_JSON_ID en Code.gs.');
   }
-
-  var n = parseFloat(s);
-  return isNaN(n) ? NaN : n;
+  try {
+    return DriveApp.getFolderById(CARPETA_JSON_ID);
+  } catch (e) {
+    throw new Error('No pude abrir la carpeta de Drive (' + CARPETA_JSON_ID + '): ' + e.message);
+  }
 }
 
-function parseCoord_(valor) { return parseNumero_(valor); }
+function leerArchivoDrive_(nombre) {
+  var cache = CacheService.getScriptCache();
+  var meta  = cache.get('meta::' + nombre);
 
-/** Normaliza POS_ID para el cruce: mayúsculas, sin espacios. */
-function normalizarPos_(valor) {
-  if (valor === null || valor === undefined) return '';
-  return valor.toString().trim().toUpperCase().replace(/\s+/g, '');
+  if (meta) {
+    var n = Number(meta), claves = [];
+    for (var i = 0; i < n; i++) claves.push('t::' + nombre + '::' + i);
+    var trozos = cache.getAll(claves), partes = [], ok = true;
+    for (var j = 0; j < n; j++) {
+      var t = trozos['t::' + nombre + '::' + j];
+      if (!t) { ok = false; break; }
+      partes.push(t);
+    }
+    if (ok) return partes.join('');
+  }
+
+  var it = carpetaJson_().getFilesByName(nombre);
+  if (!it.hasNext()) {
+    throw new Error("No encontré '" + nombre + "' en Drive. Corre etl_sellout.py.");
+  }
+  var texto = it.next().getBlob().getDataAsString('UTF-8');
+
+  var total = Math.ceil(texto.length / CACHE_TROZO);
+  if (total <= CACHE_MAX_TROZOS) {
+    var mapa = {};
+    for (var k = 0; k < total; k++) {
+      mapa['t::' + nombre + '::' + k] = texto.substr(k * CACHE_TROZO, CACHE_TROZO);
+    }
+    mapa['meta::' + nombre] = String(total);
+    try { cache.putAll(mapa, CACHE_SEGUNDOS); } catch (e) { /* caché llena */ }
+  }
+  return texto;
 }
 
-/** Clave de mes 'YYYY-MM'. Tolera Date, d/m/yyyy y yyyy-mm-dd. */
-function mesDe_(valor) {
-  if (valor === null || valor === undefined || valor === '') return '';
-
-  var d = null;
-  if (Object.prototype.toString.call(valor) === '[object Date]' && !isNaN(valor.getTime())) {
-    d = valor;
-  } else {
-    var s = valor.toString().trim();
-    var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (m) {
-      d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-    } else {
-      m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-      if (m) d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    }
-  }
-  if (!d || isNaN(d.getTime())) return '';
-
-  var mes = d.getMonth() + 1;
-  return d.getFullYear() + '-' + (mes < 10 ? '0' + mes : '' + mes);
+/** Ejecutar tras cada corrida del ETL. */
+function limpiarCache() {
+  CacheService.getScriptCache().removeAll([
+    'meta::so_pdv.json', 'meta::so_portafolio.json', 'meta::so_indice.json',
+    'meta::so_sku_indice.json', 'meta::so_manifiesto.json'
+  ]);
+  Logger.log('Caché limpiada.');
+  return 'OK';
 }
 
-/** Índice de la primera columna cuyo encabezado contenga alguno de los fragmentos. */
-function buscarCol_(headers, fragmentos) {
-  for (var f = 0; f < fragmentos.length; f++) {
-    for (var i = 0; i < headers.length; i++) {
-      if (headers[i].indexOf(fragmentos[f]) !== -1) return i;
-    }
+function nombreFrag_(prefijo, n) {
+  var num = parseInt(n, 10);
+  if (isNaN(num) || num < 0) {
+    throw new Error('Fragmento inválido para ' + prefijo + ': ' + JSON.stringify(n) +
+                    '. Revisa el índice generado por etl_sellout.py.');
   }
-  return -1;
+  var s = String(num);
+  while (s.length < 2) s = '0' + s;
+  return prefijo + s + '.json';
 }
 
 /**
- * Devuelve una geometría GeoJSON pura (Polygon/MultiPolygon) desde cualquier
- * variante: Geometry, Feature, FeatureCollection o arreglo suelto de coordenadas.
+ * Número de fragmento de un PDV en so_indice.json. El ETL guarda cada PDV
+ * como objeto {desc, frag, unidades, importe}; se acepta también un número
+ * suelto por compatibilidad. Devuelve NaN si no hay fragmento válido.
  */
-function normalizarGeometria_(obj) {
-  if (!obj || typeof obj !== 'object') return null;
+function fragDePdv_(entrada) {
+  if (entrada !== null && typeof entrada === 'object') entrada = entrada.frag;
+  return parseInt(entrada, 10);
+}
 
-  if (obj.type === 'FeatureCollection' && obj.features && obj.features.length) {
-    var geoms = [];
-    for (var i = 0; i < obj.features.length; i++) {
-      var g = normalizarGeometria_(obj.features[i]);
-      if (!g) continue;
-      if (g.type === 'Polygon') geoms.push(g.coordinates);
-      else if (g.type === 'MultiPolygon') geoms = geoms.concat(g.coordinates);
-    }
-    if (geoms.length === 0) return null;
-    return geoms.length === 1
-      ? { type: 'Polygon', coordinates: geoms[0] }
-      : { type: 'MultiPolygon', coordinates: geoms };
-  }
-
-  if (obj.type === 'Feature') return normalizarGeometria_(obj.geometry);
-
-  if (obj.type === 'Polygon' || obj.type === 'MultiPolygon') {
-    if (!obj.coordinates || !obj.coordinates.length) return null;
-    return { type: obj.type, coordinates: obj.coordinates };
-  }
-
-  // Exportadores que guardan solo el arreglo de coordenadas, sin 'type'
-  if (Object.prototype.toString.call(obj) === '[object Array]' && obj.length) {
-    return { type: 'Polygon', coordinates: obj };
-  }
-
-  return null;
+/**
+ * so_detalle_NN.json trae {fragmento, meses, pdv: {POS_ID: {SKU: serie}}}.
+ * Devuelve el mapa de PDV; si el archivo viene plano ({POS_ID: ...}) lo usa tal cual.
+ */
+function pdvsDeFragmento_(datos) {
+  return (datos && datos.pdv && typeof datos.pdv === 'object') ? datos.pdv : (datos || {});
 }
 
 /* ============================================================
- * Endpoint: Bricks
+ * Endpoints — ventas
  * ============================================================ */
+
+/** PDV × BU × mes. Base del mapa. */
+function getVentasJson() {
+  return leerArchivoDrive_('so_pdv.json');
+}
+
+/** SKU × mes + catálogo de productos. */
+function getPortafolioJson() {
+  return leerArchivoDrive_('so_portafolio.json');
+}
+
+/** Portafolio de UN PDV (bajo demanda, al hacer clic en un marcador). */
+function getDetallePdvJson(posId) {
+  var pos = normalizarPos_(posId);
+  if (!pos) return JSON.stringify({ posId: '', productos: {} });
+
+  var indice = JSON.parse(leerArchivoDrive_('so_indice.json'));
+  var entrada = indice.pdv ? indice.pdv[pos] : undefined;
+  if (entrada === undefined) {
+    return JSON.stringify({ posId: pos, productos: {}, aviso: 'PDV sin ventas.' });
+  }
+  var frag  = fragDePdv_(entrada);
+  var datos = JSON.parse(leerArchivoDrive_(nombreFrag_('so_detalle_', parseInt(frag, 10))));
+  return JSON.stringify({ posId: pos, productos: pdvsDeFragmento_(datos)[pos] || {} });
+}
+
+/** Portafolio agregado de varios PDV (todos los de un brick). */
+function getDetalleAgregadoJson(posIdsCsv) {
+  var lista = (posIdsCsv || '').split(',').map(normalizarPos_).filter(Boolean);
+  if (!lista.length) {
+    return JSON.stringify({ productos: {}, pdvConsultados: 0, pdvConVentas: 0 });
+  }
+
+  var vistos = {}, unicos = [];
+  lista.forEach(function(p) { if (!vistos[p]) { vistos[p] = 1; unicos.push(p); } });
+
+  var indice  = JSON.parse(leerArchivoDrive_('so_indice.json'));
+  var porFrag = {}, encontrados = 0;
+  unicos.forEach(function(pos) {
+    var entrada = indice.pdv ? indice.pdv[pos] : undefined;
+    if (entrada === undefined) return;
+    var f = fragDePdv_(entrada);
+    if (isNaN(f)) return;
+    if (!porFrag[f]) porFrag[f] = [];
+    porFrag[f].push(pos);
+    encontrados++;
+  });
+
+  var acc = {};
+  Object.keys(porFrag).forEach(function(f) {
+    // Las claves de porFrag son strings (Object.keys): se convierten a entero.
+    var datos = pdvsDeFragmento_(JSON.parse(
+      leerArchivoDrive_(nombreFrag_('so_detalle_', parseInt(f, 10)))));
+    porFrag[f].forEach(function(pos) {
+      var skus = datos[pos];
+      if (!skus) return;
+      Object.keys(skus).forEach(function(sku) {
+        if (!acc[sku]) acc[sku] = {};
+        skus[sku].forEach(function(t) {
+          var s = acc[sku][t[0]];
+          if (!s) s = acc[sku][t[0]] = [0, 0];
+          s[0] += t[1]; s[1] += t[2];
+        });
+      });
+    });
+  });
+
+  var productos = {};
+  Object.keys(acc).forEach(function(sku) {
+    var serie = [];
+    Object.keys(acc[sku]).forEach(function(im) {
+      serie.push([Number(im), acc[sku][im][0], acc[sku][im][1]]);
+    });
+    serie.sort(function(a, b) { return a[0] - b[0]; });
+    productos[sku] = serie;
+  });
+
+  return JSON.stringify({
+    productos: productos, pdvConsultados: unicos.length, pdvConVentas: encontrados
+  });
+}
+
+/* ============================================================
+ * Endpoint nuevo: distribución geográfica de UN producto
+ * ============================================================
+ * Responde "¿dónde rota este SKU?". El frontend lo usa para
+ * recolorear el mapa por ventas de ese producto y para calcular
+ * cobertura, precio promedio ponderado y brechas.
+ *
+ * Devuelve: { sku, pdv: { 'POS_ID': [[iMes, units, amount], ...] } }
+ */
+function getDistribucionSkuJson(sku) {
+  var s = (sku || '').toString().trim();
+  if (!s) return JSON.stringify({ sku: '', pdv: {} });
+
+  var indice = JSON.parse(leerArchivoDrive_('so_sku_indice.json'));
+  var frag   = indice.sku ? indice.sku[s] : undefined;
+  if (frag === undefined) {
+    return JSON.stringify({ sku: s, pdv: {}, aviso: 'Producto sin ventas registradas.' });
+  }
+  var datos = JSON.parse(leerArchivoDrive_(nombreFrag_('so_sku_', parseInt(frag, 10))));
+  return JSON.stringify({ sku: s, pdv: datos[s] || {} });
+}
+
+/* ============================================================
+ * Endpoints — geografía (Google Sheets)
+ * ============================================================ */
+
 function getBricksJson() {
   var sheet = abrirHoja_().getSheetByName(VISOR_HOJA_BRICKS);
   if (!sheet) {
-    throw new Error("No se encontró la pestaña '" + VISOR_HOJA_BRICKS +
-                    "'. Pestañas disponibles: " + listarPestanas_().join(' | '));
+    throw new Error("No se encontró la hoja '" + VISOR_HOJA_BRICKS + "'. " +
+                    "Disponibles: " + listarPestanas_().join(' | '));
   }
 
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return JSON.stringify({ bricks: [], stats: { filas: 0, conGeometria: 0, sinGeometria: 0, erroresMuestra: [] } });
-  }
-
+  var data    = sheet.getDataRange().getValues();
   var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
 
-  // Detección flexible: tolera 'brick_id', 'brick id', 'geojson', 'geometria', etc.
   var iId     = buscarCol_(headers, ['brick_id', 'brick id', 'brickid', 'id_brick']);
-  var iGeo    = buscarCol_(headers, ['geometria_geojson', 'geometría_geojson', 'geojson', 'geometria', 'geometría', 'polygon', 'poligono']);
+  var iGeo    = buscarCol_(headers, ['geometria_geojson', 'geometría_geojson', 'geojson',
+                                     'geometria', 'geometría', 'polygon', 'poligono']);
   var iNombre = buscarCol_(headers, ['nombre_brick', 'nombre brick']);
   var iNom2   = buscarCol_(headers, ['nombre']);
   var iZona   = buscarCol_(headers, ['zona']);
@@ -166,298 +267,237 @@ function getBricksJson() {
   var iDpto   = buscarCol_(headers, ['departamento', 'depto']);
 
   if (iId === -1 || iGeo === -1) {
-    throw new Error("En la hoja '" + VISOR_HOJA_BRICKS + "' no encontré las columnas de ID y geometría.\n" +
-                    "Encabezados leídos: " + headers.join(' | '));
+    throw new Error("Faltan columnas de ID y geometría. Encabezados: " + headers.join(' | '));
   }
 
-  var bricks = [];
-  var conGeometria = 0, sinGeometria = 0;
-  var erroresMuestra = [];
-
+  var bricks = [], conGeo = 0, sinGeo = 0, errores = [];
   for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var brickId = row[iId];
-    if (!brickId || brickId.toString().trim() === '') continue;
+    var row = data[i], bid = row[iId];
+    if (!bid || !bid.toString().trim()) continue;
 
-    var geometry = null;
-    var raw = row[iGeo];
-    if (raw !== null && raw !== undefined && raw.toString().trim() !== '') {
-      try {
-        geometry = normalizarGeometria_(JSON.parse(raw.toString()));
-      } catch (e) {
-        geometry = null;
-        if (erroresMuestra.length < 3) {
-          erroresMuestra.push(brickId + ' -> ' + raw.toString().substring(0, 60));
-        }
-      }
+    var geom = null, raw = row[iGeo];
+    if (raw && raw.toString().trim()) {
+      try { geom = normalizarGeometria_(JSON.parse(raw.toString())); }
+      catch (e) { if (errores.length < 3) errores.push(bid + ': ' + raw.toString().substring(0, 60)); }
     }
-    if (geometry) conGeometria++; else sinGeometria++;
+    if (geom) conGeo++; else sinGeo++;
 
     bricks.push({
-      brickId: brickId.toString().trim(),
-      nombre: iNom2 !== -1 ? String(row[iNom2]) : '',
-      zona: iZona !== -1 ? String(row[iZona]) : '',
-      ciudad: iCiudad !== -1 ? String(row[iCiudad]) : '',
-      departamento: iDpto !== -1 ? String(row[iDpto]) : '',
-      nombreBrick: iNombre !== -1 ? String(row[iNombre]) : '',
-      geometry: geometry
+      brickId:      bid.toString().trim(),
+      nombre:       iNom2   !== -1 ? String(row[iNom2])   : '',
+      zona:         iZona   !== -1 ? String(row[iZona])   : '',
+      ciudad:       iCiudad !== -1 ? String(row[iCiudad]) : '',
+      departamento: iDpto   !== -1 ? String(row[iDpto])   : '',
+      nombreBrick:  iNombre !== -1 ? String(row[iNombre]) : '',
+      geometry:     geom
     });
   }
 
   return JSON.stringify({
     bricks: bricks,
-    stats: {
-      filas: bricks.length,
-      conGeometria: conGeometria,
-      sinGeometria: sinGeometria,
-      erroresMuestra: erroresMuestra
-    }
+    stats: { filas: bricks.length, conGeometria: conGeo,
+             sinGeometria: sinGeo, erroresMuestra: errores }
   });
 }
 
-/* ============================================================
- * Endpoint: Puntos de venta (maestro)
- * ============================================================ */
 function getPuntosJson() {
   var sheet = abrirHoja_().getSheetByName(NOMBRE_HOJA_PUNTOS);
   if (!sheet) {
-    throw new Error("No se encontró la pestaña '" + NOMBRE_HOJA_PUNTOS +
-                    "'. Pestañas disponibles: " + listarPestanas_().join(' | '));
+    throw new Error("No se encontró la hoja '" + NOMBRE_HOJA_PUNTOS + "'. " +
+                    "Disponibles: " + listarPestanas_().join(' | '));
   }
 
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return JSON.stringify({ puntos: [], stats: { filas: 0, conCoordenada: 0, sinCoordenada: 0, conPosId: 0 } });
-  }
-
+  var data    = sheet.getDataRange().getValues();
   var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
 
-  var idIdx        = buscarCol_(headers, ['id cuenta']);
-  var idSapIdx     = buscarCol_(headers, ['id cliente sap']);
-  var nameIdx      = buscarCol_(headers, ['nombre de la cuenta']);
-  var grupoIdx     = buscarCol_(headers, ['grupo de compras']);
-  var channelIdx   = buscarCol_(headers, ['channel']);
-  var regionIdx    = buscarCol_(headers, ['región', 'region']);
-  var poblacionIdx = buscarCol_(headers, ['población', 'poblacion']);
-  var calleIdx     = buscarCol_(headers, ['calle']);
-  var numeroIdx    = buscarCol_(headers, ['número/piso', 'numero/piso']);
-  var brickCrmIdx  = buscarCol_(headers, ['brick ubicación', 'brick ubicacion']);
-  var latIdx       = buscarCol_(headers, ['latitud']);
-  var lngIdx       = buscarCol_(headers, ['longitud']);
-  var posIdIdx     = buscarCol_(headers, ['oficina farmacia', 'oficina de farmacia']);
-  var potencialIdx = buscarCol_(headers, ['potencial cliente', 'potencial']);
-  var afinidadIdx  = buscarCol_(headers, ['afinidad']);
-  var tipoRegIdx   = buscarCol_(headers, ['tipo de registro']);
+  var idIdx     = buscarCol_(headers, ['id cuenta']);
+  var idSapIdx  = buscarCol_(headers, ['id cliente sap']);
+  var nameIdx   = buscarCol_(headers, ['nombre de la cuenta']);
+  var grupoIdx  = buscarCol_(headers, ['grupo de compras']);
+  var canalIdx  = buscarCol_(headers, ['channel']);
+  var regIdx    = buscarCol_(headers, ['región', 'region']);
+  var pobIdx    = buscarCol_(headers, ['población', 'poblacion']);
+  var calleIdx  = buscarCol_(headers, ['calle']);
+  var numIdx    = buscarCol_(headers, ['número/piso', 'numero/piso']);
+  var brickIdx  = buscarCol_(headers, ['brick ubicación', 'brick ubicacion']);
+  var latIdx    = buscarCol_(headers, ['latitud']);
+  var lngIdx    = buscarCol_(headers, ['longitud']);
+  var posIdIdx  = buscarCol_(headers, ['oficina farmacia', 'oficina de farmacia']);
+  var potIdx    = buscarCol_(headers, ['potencial cliente', 'potencial']);
+  var afinIdx   = buscarCol_(headers, ['afinidad']);
 
   if (latIdx === -1 || lngIdx === -1) {
-    throw new Error("No encontré columnas 'Latitud' y 'Longitud' en '" + NOMBRE_HOJA_PUNTOS + "'.");
+    throw new Error("No encontré 'Latitud'/'Longitud'.");
   }
 
-  var puntos = [];
-  var filas = 0, sinCoordenada = 0, conPosId = 0;
-
-  function texto_(row, i) {
-    return (i !== -1 && row[i] !== null && row[i] !== undefined) ? row[i].toString().trim() : '';
-  }
+  var puntos = [], filas = 0, sinCoord = 0, conPos = 0;
+  function txt(row, i) { return (i !== -1 && row[i] != null) ? row[i].toString().trim() : ''; }
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-
-    if (texto_(row, idIdx) === '' && texto_(row, nameIdx) === '') continue;
+    if (!txt(row, idIdx) && !txt(row, nameIdx)) continue;
     filas++;
 
-    var lat = parseNumero_(row[latIdx]);
-    var lng = parseNumero_(row[lngIdx]);
-
+    var lat = parseNum_(row[latIdx]), lng = parseNum_(row[lngIdx]);
     if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0) ||
-        lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      sinCoordenada++;
-      continue;
-    }
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) { sinCoord++; continue; }
 
-    var posId = normalizarPos_(texto_(row, posIdIdx));
-    if (posId !== '') conPosId++;
-
-    var calle = texto_(row, calleIdx);
-    var numero = texto_(row, numeroIdx);
+    var posId = normalizarPos_(txt(row, posIdIdx));
+    if (posId) conPos++;
 
     puntos.push({
-      id: texto_(row, idIdx),
-      idSap: texto_(row, idSapIdx),
-      posId: posId,
-      name: texto_(row, nameIdx) || 'Sin Nombre',
-      lat: lat,
-      lng: lng,
-      grupo: texto_(row, grupoIdx) || 'Sin Grupo',
-      channel: texto_(row, channelIdx) || 'Sin Canal',
-      region: texto_(row, regionIdx) || 'Sin Región',
-      poblacion: texto_(row, poblacionIdx) || 'Sin Población',
-      potencial: texto_(row, potencialIdx) || 'Sin Potencial',
-      afinidad: texto_(row, afinidadIdx),
-      tipoRegistro: texto_(row, tipoRegIdx),
-      direccion: [calle, numero].filter(function(x) { return x; }).join(' ') || 'Sin Dirección',
-      brickCrm: texto_(row, brickCrmIdx)
+      id: txt(row, idIdx), idSap: txt(row, idSapIdx), posId: posId,
+      name:      txt(row, nameIdx)  || 'Sin Nombre',
+      lat: lat, lng: lng,
+      grupo:     txt(row, grupoIdx) || 'Sin Grupo',
+      channel:   txt(row, canalIdx) || 'Sin Canal',
+      region:    txt(row, regIdx)   || 'Sin Región',
+      poblacion: txt(row, pobIdx)   || 'Sin Población',
+      potencial: txt(row, potIdx)   || 'Sin Potencial',
+      afinidad:  txt(row, afinIdx),
+      direccion: [txt(row, calleIdx), txt(row, numIdx)].filter(Boolean).join(' ') || 'Sin Dirección',
+      brickCrm:  txt(row, brickIdx)
     });
   }
 
   return JSON.stringify({
     puntos: puntos,
-    stats: {
-      filas: filas,
-      conCoordenada: puntos.length,
-      sinCoordenada: sinCoordenada,
-      conPosId: conPosId,
-      columnaPosIdDetectada: posIdIdx !== -1 ? String(data[0][posIdIdx]) : '(no encontrada)'
-    }
+    stats: { filas: filas, conCoordenada: puntos.length, sinCoordenada: sinCoord,
+             conPosId: conPos,
+             columnaPosIdDetectada: posIdIdx !== -1 ? String(data[0][posIdIdx]) : '(no encontrada)' }
   });
 }
 
 /* ============================================================
- * Endpoint: Sell Out agregado por POS_ID × mes
+ * Diagnóstico
  * ============================================================ */
-function getVentasJson() {
-  var sheet = abrirHoja_().getSheetByName(NOMBRE_HOJA_VENTAS);
-  if (!sheet) {
-    throw new Error("No se encontró la pestaña '" + NOMBRE_HOJA_VENTAS +
-                    "'. Pestañas disponibles: " + listarPestanas_().join(' | '));
-  }
 
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return JSON.stringify({ meses: [], ventas: {}, stats: { filas: 0, ignoradas: 0, posUnicos: 0 } });
-  }
-
-  var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
-
-  var fechaIdx  = buscarCol_(headers, ['fecha', 'date']);
-  var posIdx    = buscarCol_(headers, ['pos_id', 'pos id']);
-  var buIdx     = buscarCol_(headers, ['bu']);
-  var unitsIdx  = buscarCol_(headers, ['units', 'unidades']);
-  var amountIdx = buscarCol_(headers, ['amount', 'importe', 'venta']);
-
-  if (fechaIdx === -1 || posIdx === -1 || amountIdx === -1) {
-    throw new Error("En '" + NOMBRE_HOJA_VENTAS + "' faltan columnas obligatorias (Fecha, POS_ID, Amount).\n" +
-                    "Encabezados leídos: " + headers.join(' | '));
-  }
-
-  var ventas = {}, mesesSet = {}, filas = 0, ignoradas = 0;
-
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-
-    var pos = normalizarPos_(row[posIdx]);
-    if (pos === '') continue;
-
-    var mes = mesDe_(row[fechaIdx]);
-    if (mes === '') { ignoradas++; continue; }
-
-    var a = parseNumero_(row[amountIdx]); if (isNaN(a)) a = 0;
-    var u = unitsIdx !== -1 ? parseNumero_(row[unitsIdx]) : NaN; if (isNaN(u)) u = 0;
-
-    filas++;
-    mesesSet[mes] = 1;
-
-    var v = ventas[pos];
-    if (!v) v = ventas[pos] = { m: {}, bu: {} };
-
-    var slot = v.m[mes];
-    if (!slot) slot = v.m[mes] = { u: 0, a: 0 };
-    slot.u += u;
-    slot.a += a;
-
-    if (buIdx !== -1) {
-      var b = (row[buIdx] === null || row[buIdx] === undefined) ? '' : row[buIdx].toString().trim();
-      if (b !== '') v.bu[b] = (v.bu[b] || 0) + a;
-    }
-  }
-
-  return JSON.stringify({
-    meses: Object.keys(mesesSet).sort(),
-    ventas: ventas,
-    stats: { filas: filas, ignoradas: ignoradas, posUnicos: Object.keys(ventas).length }
-  });
-}
-
-/* ============================================================
- * Endpoint: Diagnóstico
- * ============================================================
- * Responde tres preguntas: ¿existen las pestañas?, ¿hay geometría legible?,
- * ¿cuántos PDV cruzan con Sell Out?
- */
 function getDiagnosticoJson() {
-  var ss = abrirHoja_();
-  var d = { pestanas: listarPestanas_(), bricks: {}, puntos: {}, ventas: {}, cruce: {} };
+  var d = { drive: {}, bricks: {}, puntos: {}, cruce: {} };
 
-  // --- Bricks
   try {
-    var hb = ss.getSheetByName(VISOR_HOJA_BRICKS);
-    if (!hb) {
-      d.bricks.error = "La pestaña '" + VISOR_HOJA_BRICKS + "' no existe";
-    } else {
-      var db = hb.getDataRange().getValues();
-      d.bricks.encabezados = db.length ? db[0].map(String) : [];
-      var pb = JSON.parse(getBricksJson());
-      d.bricks.total = pb.bricks.length;
-      d.bricks.conGeometria = pb.stats.conGeometria;
-      d.bricks.sinGeometria = pb.stats.sinGeometria;
-      d.bricks.erroresMuestra = pb.stats.erroresMuestra;
-      var ej = null;
-      for (var i = 0; i < pb.bricks.length; i++) {
-        if (pb.bricks[i].geometry) { ej = pb.bricks[i]; break; }
+    var carpeta = carpetaJson_(), archivos = [], it = carpeta.getFiles();
+    while (it.hasNext()) {
+      var f = it.next();
+      archivos.push(f.getName() + ' (' + Math.round(f.getSize() / 1024) + ' KB)');
+    }
+    d.drive.carpeta  = carpeta.getName();
+    d.drive.archivos = archivos.sort();
+    try { d.drive.manifiesto = JSON.parse(leerArchivoDrive_('so_manifiesto.json')); }
+    catch (e) { d.drive.manifiesto = 'No disponible: ' + e.message; }
+    d.drive.indiceSkuDisponible = archivos.some(function(a) { return a.indexOf('so_sku_indice') === 0; });
+  } catch (e) { d.drive.error = e.message; }
+
+  try {
+    var pb = JSON.parse(getBricksJson());
+    d.bricks = { total: pb.bricks.length, conGeometria: pb.stats.conGeometria,
+                 sinGeometria: pb.stats.sinGeometria };
+    for (var i = 0; i < pb.bricks.length; i++) {
+      if (pb.bricks[i].geometry) {
+        var g = pb.bricks[i].geometry;
+        d.bricks.ejemplo = {
+          brickId: pb.bricks[i].brickId, tipo: g.type,
+          primerVertice: g.type === 'Polygon' ? g.coordinates[0][0] : g.coordinates[0][0][0]
+        };
+        break;
       }
-      d.bricks.ejemplo = ej ? {
-        brickId: ej.brickId,
-        tipo: ej.geometry.type,
-        primerVertice: ej.geometry.type === 'Polygon'
-          ? ej.geometry.coordinates[0][0]
-          : ej.geometry.coordinates[0][0][0]
-      } : null;
     }
   } catch (e) { d.bricks.error = e.message; }
 
-  // --- Puntos
-  var puntos = [];
   try {
     var pp = JSON.parse(getPuntosJson());
-    puntos = pp.puntos;
     d.puntos = pp.stats;
-    d.puntos.muestraPosId = puntos.filter(function(p) { return p.posId; })
-                                  .slice(0, 5).map(function(p) { return p.posId; });
+    var indice = JSON.parse(leerArchivoDrive_('so_indice.json'));
+    var ventas = indice.pdv || {};
+    var cruzan = 0, sinPos = 0;
+    pp.puntos.forEach(function(p) {
+      if (!p.posId || p.posId === '0') { sinPos++; return; }
+      if (ventas[p.posId] !== undefined) cruzan++;
+    });
+    d.cruce = {
+      pdvTotales: pp.puntos.length, pdvSinPosId: sinPos, pdvQueCruzan: cruzan,
+      porcentaje: pp.puntos.length ? Math.round(100 * cruzan / pp.puntos.length) + '%' : '0%'
+    };
   } catch (e) { d.puntos.error = e.message; }
 
-  // --- Ventas
-  var ventas = {};
+  return JSON.stringify(d, null, 2);
+}
+
+function probarConexion() {
   try {
-    var pv = JSON.parse(getVentasJson());
-    ventas = pv.ventas;
-    d.ventas = pv.stats;
-    d.ventas.meses = pv.meses;
-    d.ventas.muestraPosId = Object.keys(ventas).slice(0, 5);
-  } catch (e) { d.ventas.error = e.message; }
+    var carpeta = carpetaJson_(), archivos = [], it = carpeta.getFiles();
+    while (it.hasNext()) archivos.push(it.next().getName());
+    archivos.sort();
+    var haySku = archivos.some(function(a) { return a.indexOf('so_sku_') === 0; });
+    Logger.log('Carpeta "' + carpeta.getName() + '" accesible.');
+    Logger.log('Archivos (' + archivos.length + '): ' + archivos.join(', '));
+    Logger.log(haySku ? 'Índice por SKU disponible: análisis de producto activo.'
+                      : 'FALTA el índice por SKU. Corre el ETL actualizado.');
+    return 'OK: ' + archivos.length + ' archivos.';
+  } catch (e) {
+    Logger.log('Error: ' + e.message);
+    return 'ERROR: ' + e.message;
+  }
+}
 
-  // --- Cruce
-  var cruzan = 0, sinPos = 0, noEncontrados = [];
-  puntos.forEach(function(p) {
-    if (!p.posId) { sinPos++; return; }
-    if (ventas[p.posId]) cruzan++;
-    else if (noEncontrados.length < 5) noEncontrados.push(p.posId);
-  });
-  d.cruce = {
-    pdvTotales: puntos.length,
-    pdvSinPosId: sinPos,
-    pdvQueCruzan: cruzan,
-    porcentaje: puntos.length ? Math.round(100 * cruzan / puntos.length) + '%' : '0%',
-    muestraNoEncontrados: noEncontrados
-  };
+function verDiagnostico() { Logger.log(getDiagnosticoJson()); }
 
-  return JSON.stringify(d);
+/* ============================================================
+ * Utilidades
+ * ============================================================ */
+
+function parseNum_(v) {
+  if (v === null || v === undefined || v === '') return NaN;
+  if (typeof v === 'number') return v;
+  var s = v.toString().trim().replace(/\s+/g, '');
+  if (!s) return NaN;
+  var coma = s.indexOf(',') !== -1, punto = s.indexOf('.') !== -1;
+  if (coma && punto) {
+    s = s.lastIndexOf(',') > s.lastIndexOf('.')
+      ? s.replace(/\./g, '').replace(/,/g, '.') : s.replace(/,/g, '');
+  } else if (coma) {
+    var p = s.split(','); s = p[0] + '.' + p.slice(1).join('');
+  }
+  var n = parseFloat(s);
+  return isNaN(n) ? NaN : n;
+}
+
+function normalizarPos_(v) {
+  if (!v) return '';
+  return v.toString().trim().toUpperCase().replace(/\s+/g, '').replace(/:/g, '_');
+}
+
+function buscarCol_(headers, frags) {
+  for (var f = 0; f < frags.length; f++) {
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].indexOf(frags[f]) !== -1) return i;
+    }
+  }
+  return -1;
+}
+
+function normalizarGeometria_(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj.type === 'FeatureCollection' && obj.features) {
+    var geoms = [];
+    obj.features.forEach(function(ft) {
+      var g = normalizarGeometria_(ft);
+      if (!g) return;
+      if (g.type === 'Polygon') geoms.push(g.coordinates);
+      else if (g.type === 'MultiPolygon') geoms = geoms.concat(g.coordinates);
+    });
+    if (!geoms.length) return null;
+    return geoms.length === 1 ? { type: 'Polygon', coordinates: geoms[0] }
+                              : { type: 'MultiPolygon', coordinates: geoms };
+  }
+  if (obj.type === 'Feature') return normalizarGeometria_(obj.geometry);
+  if (obj.type === 'Polygon' || obj.type === 'MultiPolygon') {
+    return (obj.coordinates && obj.coordinates.length) ? obj : null;
+  }
+  if (Array.isArray(obj) && obj.length) return { type: 'Polygon', coordinates: obj };
+  return null;
 }
 
 function listarPestanas_() {
   return abrirHoja_().getSheets().map(function(s) { return s.getName(); });
-}
-
-/** Ejecuta el diagnóstico desde el editor de Apps Script (resultado en el Registro). */
-function verDiagnostico() {
-  Logger.log(getDiagnosticoJson());
 }
