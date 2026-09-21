@@ -10,6 +10,9 @@ deja en CARPETA_SALIDA los JSON que consume la web app:
   so_portafolio.json   SKU × mes (con descripción, familia y BU)
   so_indice.json       PDV -> fragmento de detalle, descripción y totales
   so_detalle_NN.json   PDV × SKU × mes, repartido en N_FRAGMENTOS archivos
+  so_sku_NN.json       SKU × PDV × mes (índice invertido, rotación por producto),
+                       repartido en N_FRAGMENTOS_SKU archivos
+  so_sku_indice.json   SKU -> fragmento so_sku_NN, más la lista de meses
   so_manifiesto.json   metadatos de la corrida (se escribe al final)
 
 Las series usan tripletas compactas [índiceMes, unidades, importe], donde
@@ -42,7 +45,6 @@ from pathlib import Path
 
 CARPETA_SCRIPT = Path(__file__).resolve().parent
 
-CAMPOS_CODIGO = ("pos_id", "sku")
 CAMPOS_NUMERO = ("units", "amount")
 SIN_BU = "SIN_BU"
 SIN_SKU = "SIN_SKU"
@@ -261,6 +263,12 @@ def normalizar_codigo(valor):
     return re.sub(r"\s+", "", normalizar_texto(valor)).upper()
 
 
+def normalizar_pos(valor):
+    """POS_ID: como normalizar_codigo y además unifica el separador ":" con "_"
+    ("111:S566" y "111_S566" son el mismo PDV)."""
+    return normalizar_codigo(valor).replace(":", "_")
+
+
 def normalizar_numero(valor):
     """Número (float) o None. Acepta coma decimal y separadores de miles:
     "1.234.567,89", "1,234,567.89", "12,5", "1.234.567", "$ 1.500", "(1.500)".
@@ -345,7 +353,9 @@ def normalizar_campo(campo, valor):
     if campo == "fecha":
         anio_mes = normalizar_fecha(valor)
         return texto_mes(anio_mes) if anio_mes else None
-    if campo in CAMPOS_CODIGO:
+    if campo == "pos_id":
+        return normalizar_pos(valor)
+    if campo == "sku":
         return normalizar_codigo(valor)
     if campo in CAMPOS_NUMERO:
         return normalizar_numero(valor)
@@ -576,12 +586,15 @@ def ejecutar(cfg, limite):
     salida = Path(cfg.CARPETA_SALIDA)
     fila_enc = int(getattr(cfg, "FILA_ENCABEZADOS", 1))
     n_fragmentos = int(getattr(cfg, "N_FRAGMENTOS", 16))
+    n_fragmentos_sku = int(getattr(cfg, "N_FRAGMENTOS_SKU", 8))
     obligatorios = campos_obligatorios(cfg)
 
     # Acumuladores [unidades, importe] por mes (clave entera AAAAMM).
     por_pdv_bu = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [0.0, 0.0])))
     por_sku = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0]))
     por_pdv_sku = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [0.0, 0.0])))
+    # Índice invertido SKU × PDV × mes (rotación por producto).
+    por_sku_pdv = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [0.0, 0.0])))
     desc_pdv = {}
     info_sku = defaultdict(dict)
     conteo = defaultdict(int)
@@ -633,7 +646,7 @@ def ejecutar(cfg, limite):
             if anio_mes is None:
                 conteo["descartadas_fecha"] += 1
                 continue
-            pos_id = normalizar_codigo(celda(fila, col.get("pos_id")))
+            pos_id = normalizar_pos(celda(fila, col.get("pos_id")))
             if not pos_id:
                 conteo["descartadas_pos_id"] += 1
                 continue
@@ -661,7 +674,8 @@ def ejecutar(cfg, limite):
 
             for acumulado in (por_pdv_bu[pos_id][bu][anio_mes],
                               por_sku[sku][anio_mes],
-                              por_pdv_sku[pos_id][sku][anio_mes]):
+                              por_pdv_sku[pos_id][sku][anio_mes],
+                              por_sku_pdv[sku][pos_id][anio_mes]):
                 acumulado[0] += unidades
                 acumulado[1] += importe
 
@@ -729,6 +743,19 @@ def ejecutar(cfg, limite):
     for n, pdvs in enumerate(detalle):
         guardar(f"so_detalle_{n:02d}.json", {"fragmento": n, "meses": meses, "pdv": pdvs})
 
+    # Índice invertido producto -> PDV: so_sku_NN.json = {sku: {pos_id: serie}}.
+    frags_sku = [{} for _ in range(n_fragmentos_sku)]
+    indice_sku = {}
+    for sku in sorted(por_sku_pdv):
+        pdvs = por_sku_pdv[sku]
+        fragmento = fragmento_de(sku, n_fragmentos_sku)
+        indice_sku[sku] = fragmento
+        frags_sku[fragmento][sku] = {pos_id: serie(pdvs[pos_id]) for pos_id in sorted(pdvs)}
+    for n, skus in enumerate(frags_sku):
+        guardar(f"so_sku_{n:02d}.json", skus)
+    guardar("so_sku_indice.json",
+            {"fragmentos": n_fragmentos_sku, "meses": meses, "sku": indice_sku})
+
     total_u = sum(u for u, _ in total_mes.values())
     total_a = sum(a for _, a in total_mes.values())
     manifiesto = {
@@ -740,6 +767,7 @@ def ejecutar(cfg, limite):
         "formato_serie": ["indiceMes", "unidades", "importe"],
         "meses": meses,
         "n_fragmentos": n_fragmentos,
+        "n_fragmentos_sku": n_fragmentos_sku,
         "mapeo_columnas": {
             campo: ({"columna": mapeo[campo] + 1, "encabezado": encabezados[mapeo[campo]]}
                     if campo in mapeo else None)

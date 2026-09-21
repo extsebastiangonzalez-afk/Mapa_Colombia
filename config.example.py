@@ -45,6 +45,11 @@ FILA_ENCABEZADOS = 1
 # POS_ID), así la web app solo descarga el fragmento del PDV que consulta.
 N_FRAGMENTOS = 16
 
+# Número de archivos so_sku_NN.json del índice invertido SKU × PDV × mes
+# (rotación por producto). Cada SKU cae siempre en el mismo fragmento;
+# so_sku_indice.json dice cuál.
+N_FRAGMENTOS_SKU = 8
+
 # ---------------------------------------------------------------------------
 # Mapeo de columnas
 # ---------------------------------------------------------------------------
