@@ -14,21 +14,32 @@
  *   so_sku_NN.json       SKU × PDV × mes       → distribución de un producto
  *   so_manifiesto.json   metadatos             → diagnóstico
  *
- * El cruce entre ventas y maestro es POS_ID <-> 'Nº Oficina Farmacia'.
+ * Además lee, directo del Sheet (no del Drive/ETL), la hoja 'Asignacion'
+ * (VM/LAM por PDV) vía getAsignacionesJson().
  *
- * Endpoints (devuelven STRINGS JSON; el cliente hace JSON.parse):
- *   getBricksJson() · getPuntosJson() · getVentasJson() · getDiagnosticoJson()
+ * CONFIGURACIÓN: solo hay que revisar CARPETA_JSON_ID y SPREADSHEET_ID.
+ *
+ * DESPUÉS DE CADA CORRIDA DEL ETL: ejecutar limpiarCache().
  */
 
-var NOMBRE_HOJA_PUNTOS = 'CO_Puntos_Maestro clientes';
-var VISOR_HOJA_BRICKS  = 'Bricks';
-var NOMBRE_HOJA_VENTAS = 'Sell Out 2026';
+/* ============================================================
+ * CONFIGURACIÓN
+ * ============================================================ */
 
-var SPREADSHEET_ID = '1fILFlz4cO4mmW-oOnhTuewCicoWJ8bzFUUAN30GaewI';
+var CARPETA_JSON_ID = '1Kg2WPunJtn-KjeNdhsEN4ojT6q00JPhm';
+var SPREADSHEET_ID  = '1fILFlz4cO4mmW-oOnhTuewCicoWJ8bzFUUAN30GaewI';
 
-function abrirHoja_() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
-}
+var NOMBRE_HOJA_PUNTOS     = 'CO_Puntos_Maestro clientes';
+var VISOR_HOJA_BRICKS      = 'Bricks';
+var NOMBRE_HOJA_ASIGNACION = 'Asignacion';
+
+var CACHE_SEGUNDOS   = 21600;   // 6 horas
+var CACHE_TROZO      = 90000;   // CacheService acepta 100 KB por clave
+var CACHE_MAX_TROZOS = 60;      // ~5.4 MB máximo por archivo
+
+/* ============================================================
+ * Entrada de la Web App
+ * ============================================================ */
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -362,77 +373,61 @@ function getPuntosJson() {
 }
 
 /* ============================================================
- * Endpoint: Sell Out agregado por POS_ID × mes
+ * Endpoint — cobertura comercial (Google Sheets)
  * ============================================================ */
-function getVentasJson() {
-  var sheet = abrirHoja_().getSheetByName(NOMBRE_HOJA_VENTAS);
+
+/**
+ * Hoja 'Asignacion': quién (VM o LAM) tiene asignado cada PDV. Cruza por
+ * 'Nº Oficina Farmacia' (mismo POS_ID normalizado que el resto del visor).
+ * Un PDV puede tener más de una fila (p. ej. un VM y un LAM a la vez),
+ * así que devuelve un arreglo de asignaciones por PDV, no una sola.
+ */
+function getAsignacionesJson() {
+  var sheet = abrirHoja_().getSheetByName(NOMBRE_HOJA_ASIGNACION);
   if (!sheet) {
-    throw new Error("No se encontró la pestaña '" + NOMBRE_HOJA_VENTAS +
-                    "'. Pestañas disponibles: " + listarPestanas_().join(' | '));
+    return JSON.stringify({ pdv: {}, aviso: "No se encontró la hoja '" + NOMBRE_HOJA_ASIGNACION + "'." });
   }
 
   var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return JSON.stringify({ meses: [], ventas: {}, stats: { filas: 0, ignoradas: 0, posUnicos: 0 } });
-  }
-
+  if (data.length < 2) return JSON.stringify({ pdv: {} });
   var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
 
-  var fechaIdx  = buscarCol_(headers, ['fecha', 'date']);
-  var posIdx    = buscarCol_(headers, ['pos_id', 'pos id']);
-  var buIdx     = buscarCol_(headers, ['bu']);
-  var unitsIdx  = buscarCol_(headers, ['units', 'unidades']);
-  var amountIdx = buscarCol_(headers, ['amount', 'importe', 'venta']);
+  var iPos      = buscarCol_(headers, ['oficina farmacia', 'oficina de farmacia']);
+  var iDelegado = buscarCol_(headers, ['delegado']);
+  var iCuentaId = buscarCol_(headers, ['id cuenta']);
+  var iCuentaNom= buscarCol_(headers, ['nombre de la cuenta']);
+  var iTipo     = buscarCol_(headers, ['tipo de registro']);
+  var iTeam     = buscarCol_(headers, ['team']);
 
-  if (fechaIdx === -1 || posIdx === -1 || amountIdx === -1) {
-    throw new Error("En '" + NOMBRE_HOJA_VENTAS + "' faltan columnas obligatorias (Fecha, POS_ID, Amount).\n" +
-                    "Encabezados leídos: " + headers.join(' | '));
+  if (iPos === -1) {
+    throw new Error("No encontré 'Nº Oficina Farmacia' en la hoja '" + NOMBRE_HOJA_ASIGNACION +
+                    "'. Encabezados: " + headers.join(' | '));
   }
 
-  var ventas = {}, mesesSet = {}, filas = 0, ignoradas = 0;
-
+  var pdv = {};
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-
-    var pos = normalizarPos_(row[posIdx]);
-    if (pos === '') continue;
-
-    var mes = mesDe_(row[fechaIdx]);
-    if (mes === '') { ignoradas++; continue; }
-
-    var a = parseNumero_(row[amountIdx]); if (isNaN(a)) a = 0;
-    var u = unitsIdx !== -1 ? parseNumero_(row[unitsIdx]) : NaN; if (isNaN(u)) u = 0;
-
-    filas++;
-    mesesSet[mes] = 1;
-
-    var v = ventas[pos];
-    if (!v) v = ventas[pos] = { m: {}, bu: {} };
-
-    var slot = v.m[mes];
-    if (!slot) slot = v.m[mes] = { u: 0, a: 0 };
-    slot.u += u;
-    slot.a += a;
-
-    if (buIdx !== -1) {
-      var b = (row[buIdx] === null || row[buIdx] === undefined) ? '' : row[buIdx].toString().trim();
-      if (b !== '') v.bu[b] = (v.bu[b] || 0) + a;
-    }
+    var pos = normalizarPos_(row[iPos]);
+    var delegado = iDelegado !== -1 ? String(row[iDelegado] || '').trim() : '';
+    if (!pos || !delegado) continue;
+    var asignacion = {
+      delegado:     delegado,
+      team:         iTeam      !== -1 ? String(row[iTeam]       || '').trim() : '',
+      tipo:         iTipo      !== -1 ? String(row[iTipo]       || '').trim() : '',
+      cuentaId:     iCuentaId  !== -1 ? String(row[iCuentaId]   || '').trim() : '',
+      cuentaNombre: iCuentaNom !== -1 ? String(row[iCuentaNom]  || '').trim() : ''
+    };
+    if (!pdv[pos]) pdv[pos] = [];
+    pdv[pos].push(asignacion);
   }
 
-  return JSON.stringify({
-    meses: Object.keys(mesesSet).sort(),
-    ventas: ventas,
-    stats: { filas: filas, ignoradas: ignoradas, posUnicos: Object.keys(ventas).length }
-  });
+  return JSON.stringify({ pdv: pdv });
 }
 
 /* ============================================================
- * Endpoint: Diagnóstico
- * ============================================================
- * Responde tres preguntas: ¿existen las pestañas?, ¿hay geometría legible?,
- * ¿cuántos PDV cruzan con Sell Out?
- */
+ * Diagnóstico
+ * ============================================================ */
+
 function getDiagnosticoJson() {
   var d = { drive: {}, bricks: {}, puntos: {}, cruce: {} };
 
