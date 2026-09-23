@@ -36,12 +36,14 @@ header .acc{margin-left:auto;display:flex;gap:8px}
   background:#fff8ec;border:1px solid var(--aviso);color:var(--aviso)}
 .aviso.grave{background:#fdf0f0;border-color:var(--error);color:var(--error)}
 
-.kpis{grid-area:kpis;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
-.kpi{padding:12px 16px}
-.kpi.modo-prod{border-color:var(--producto)}
-.kpi .label{font-size:12px;color:var(--ink-2);margin-bottom:2px}
-.kpi .value{font-size:24px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
-.kpi .hint{font-size:11.5px;color:var(--muted);margin-top:2px}
+      .kpis {
+        grid-area: kpis;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;
+      }
+      .kpi { padding: 12px 16px; }
+      .kpi .label { font-size: 12px; color: var(--ink-2); margin-bottom: 2px; }
+      .kpi .value { font-size: 26px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+      .kpi .hint  { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 
 .side{grid-area:side;padding:14px;overflow-y:auto}
 .side h2,.charts h2{margin:0 0 8px;font-size:13px;font-weight:700;
@@ -67,73 +69,84 @@ header .acc{margin-left:auto;display:flex;gap:8px}
 .leyenda .swatch{width:12px;height:12px;border-radius:3px;flex-shrink:0;border:1px solid var(--border)}
 .toggle{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
 
-.map-card{grid-area:map;position:relative;overflow:hidden}
-#map{position:absolute;inset:0}
-.banda-prod{position:absolute;top:10px;left:50px;right:10px;z-index:500;
-  background:var(--producto);color:#fff;padding:6px 12px;border-radius:6px;
-  font-size:12.5px;font-weight:600;display:none;align-items:center;gap:10px;
-  box-shadow:0 2px 8px rgba(0,0,0,.15)}
-.banda-prod .x{margin-left:auto;cursor:pointer;font-weight:700;padding:0 4px}
+      .map-card { grid-area: map; position: relative; overflow: hidden; }
+      #map { position: absolute; inset: 0; }
 
-.charts{grid-area:charts;padding:14px;overflow-y:auto}
-.chart-bloque{margin-bottom:22px}
-.chart-hint{font-size:11.5px;color:var(--muted);margin:-4px 0 10px}
-.chart-bloque h2 .cerrar{float:right;font-size:11px;font-weight:600;color:var(--accent);
-  cursor:pointer;text-transform:none;letter-spacing:0}
+      .charts { grid-area: charts; padding: 14px; overflow-y: auto; }
+      .chart-bloque { margin-bottom: 22px; }
+      .chart-hint { font-size: 11.5px; color: var(--muted); margin: -4px 0 10px; }
 
-.barra-fila{display:grid;grid-template-columns:1fr 66px;align-items:center;
-  gap:8px;padding:3px 4px;border-radius:5px;cursor:pointer}
-.barra-fila:hover{background:var(--page)}
-.barra-fila .cat{font-size:12px;color:var(--ink-2);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
-.barra-fila .valor{grid-row:span 2;font-size:12px;font-weight:600;color:var(--ink);
-  font-variant-numeric:tabular-nums;text-align:right}
-.barra-pista{height:10px;background:transparent;position:relative}
-.barra-relleno{position:absolute;left:0;top:0;bottom:0;background:var(--accent);
-  border-radius:0 4px 4px 0;min-width:2px;transition:width .25s ease}
-.barra-fila.apagada .barra-relleno{background:var(--desel)}
-.barra-fila.activa .cat{color:var(--ink);font-weight:600}
-.barra-fila.prod .barra-relleno{background:var(--producto)}
-.barra-fila.brecha .barra-relleno{background:var(--sem-muybajo)}
-.barra-fila:hover .barra-relleno{background:var(--accent-2)}
+      .barra-fila {
+        display: grid; grid-template-columns: 1fr 66px; align-items: center;
+        gap: 8px; padding: 3px 4px; border-radius: 5px; cursor: pointer;
+      }
+      .barra-fila:hover { background: var(--page); }
+      .barra-fila .cat {
+        font-size: 12px; color: var(--ink-2);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;
+      }
+      .barra-fila .valor {
+        grid-row: span 2; font-size: 12px; font-weight: 600; color: var(--ink);
+        font-variant-numeric: tabular-nums; text-align: right;
+      }
+      .barra-pista { height: 10px; background: transparent; position: relative; }
+      .barra-relleno {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px;
+        transition: width .25s ease;
+      }
+      .barra-fila.apagada .barra-relleno { background: var(--de-enfasis); }
+      .barra-fila.activa .cat { color: var(--ink); font-weight: 600; }
+      .barra-fila:hover .barra-relleno { background: var(--accent-2); }
+      .barra-fila.apagada:hover .barra-relleno { background: var(--muted); }
 
-.mes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(40px,1fr));gap:4px;align-items:end;height:70px}
-.mes-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
-.mes-bar{width:100%;background:var(--producto);border-radius:3px 3px 0 0;min-height:2px}
-.mes-lbl{font-size:9.5px;color:var(--muted);margin-top:3px}
+      .overlay {
+        position: fixed; inset: 0; z-index: 3000;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(249,249,247,0.75); font-weight: 600; color: var(--ink-2);
+      }
+      .overlay .caja {
+        background: var(--surface); border: 1px solid var(--border);
+        padding: 14px 28px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+      }
 
-.overlay{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;
-  background:rgba(249,249,247,.75);font-weight:600;color:var(--ink-2)}
-.overlay .caja{background:var(--surface);border:1px solid var(--border);padding:14px 28px;
-  border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
-.modal{display:none;position:fixed;inset:0;z-index:4000;background:rgba(11,11,11,.35);
-  align-items:center;justify-content:center;padding:20px}
-.modal .caja{background:var(--surface);border:1px solid var(--border);border-radius:10px;
-  max-width:760px;width:100%;max-height:80vh;overflow:auto;padding:18px 20px}
-.modal h3{margin:0 0 10px;font-size:15px}
-.modal pre{background:var(--page);border:1px solid var(--hairline);border-radius:6px;
-  padding:12px;font-size:11.5px;white-space:pre-wrap;word-break:break-word;margin:0}
+      /* Diagnóstico */
+      .modal {
+        display: none; position: fixed; inset: 0; z-index: 4000;
+        background: rgba(11,11,11,0.35); align-items: center; justify-content: center; padding: 20px;
+      }
+      .modal .caja {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+        max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; padding: 18px 20px;
+      }
+      .modal h3 { margin: 0 0 10px; font-size: 15px; }
+      .modal pre {
+        background: var(--page); border: 1px solid var(--hairline); border-radius: 6px;
+        padding: 12px; font-size: 11.5px; white-space: pre-wrap; word-break: break-word; margin: 0;
+      }
 
-.popup-pdv h3,.popup-brick h3{margin:0 0 5px;font-size:14px}
-.popup-pdv,.popup-brick{font-size:13px;max-width:295px}
-.popup-pdv a.enlace{display:inline-block;margin-top:8px;background:var(--accent);color:#fff;
-  padding:5px 10px;border-radius:5px;text-decoration:none;font-size:12.5px}
-.popup-sellout{margin:7px 0;padding:7px 9px;background:var(--page);
-  border:1px solid var(--hairline);border-radius:6px;font-variant-numeric:tabular-nums}
-.popup-sellout.prod{border-color:var(--producto);background:#f4f3fe}
-.popup-sellout .grande{font-size:15px;font-weight:700}
-.badge-pot{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--ink);
-  color:#fff;font-size:11px;font-weight:700;vertical-align:middle;margin-left:4px}
-.popup-brick ol{margin:5px 0 0;padding-left:18px}
-.popup-brick li{margin-bottom:3px}
-.mini{color:var(--muted);font-size:11.5px}
-.btn-portafolio{display:block;width:100%;margin-top:8px;padding:6px;border:1px solid var(--accent);
-  border-radius:6px;background:var(--surface);color:var(--accent);font-size:12.5px;
-  font-weight:600;cursor:pointer}
-.btn-portafolio:hover{background:var(--accent);color:#fff}
-</style>
-</head>
-<body>
+      .popup-pdv h3, .popup-brick h3 { margin: 0 0 5px 0; font-size: 14px; }
+      .popup-pdv, .popup-brick { font-size: 13px; max-width: 290px; }
+      .popup-pdv a {
+        display: inline-block; margin-top: 8px; background: var(--accent); color: #fff;
+        padding: 5px 10px; border-radius: 5px; text-decoration: none; font-size: 12.5px;
+      }
+      .popup-sellout {
+        margin: 7px 0; padding: 7px 9px; background: var(--page);
+        border: 1px solid var(--hairline); border-radius: 6px; font-variant-numeric: tabular-nums;
+      }
+      .popup-sellout .grande { font-size: 15px; font-weight: 700; }
+      .badge-pot {
+        display: inline-block; padding: 1px 7px; border-radius: 999px;
+        background: var(--ink); color: #fff; font-size: 11px; font-weight: 700;
+        vertical-align: middle; margin-left: 4px;
+      }
+      .popup-brick ol { margin: 5px 0 0; padding-left: 18px; }
+      .popup-brick li { margin-bottom: 3px; }
+      .mini { color: var(--muted); font-size: 11.5px; }
+    </style>
+  </head>
+  <body>
 
 <div id="overlay" class="overlay"><div class="caja" id="overlayTexto">Cargando datos…</div></div>
 
@@ -156,37 +169,37 @@ header .acc{margin-left:auto;display:flex;gap:8px}
   <div class="avisos" id="avisos"></div>
   <div class="kpis" id="kpis"></div>
 
-  <aside class="card side">
-    <h2>Período Sell Out</h2>
-    <select id="preset" onchange="aplicarPreset(this.value)">
-      <option value="TODOS">Todos los meses</option>
-      <option value="U3">Últimos 3 meses</option>
-      <option value="U6">Últimos 6 meses</option>
-      <option value="ANIO">Año actual</option>
-      <option value="PERS">Personalizado</option>
-    </select>
-    <div class="chips" id="chips"></div>
+      <aside class="card side">
+        <h2>Período Sell Out</h2>
+        <select id="periodoPreset" onchange="aplicarPreset(this.value)">
+          <option value="TODOS">Todos los meses</option>
+          <option value="U3">Últimos 3 meses</option>
+          <option value="U6">Últimos 6 meses</option>
+          <option value="ANIO">Año actual</option>
+          <option value="PERS">Personalizado (usar chips)</option>
+        </select>
+        <div class="chips" id="chipsMeses"></div>
 
-    <div class="seccion producto">
-      <h2>Análisis de producto</h2>
-      <label>Unidad de negocio</label>
-      <select id="buFil" onchange="cambiarBu(this.value)"><option value="TODAS">Todas las BU</option></select>
-      <label>Producto (SKU)</label>
-      <select id="skuFil" onchange="seleccionarSku(this.value)">
-        <option value="">— Vista general (sin producto) —</option>
-      </select>
-      <div class="mini" id="skuInfo" style="margin-top:6px"></div>
-    </div>
+        <div class="seccion">
+          <h2>Filtros</h2>
 
-    <div class="seccion">
-      <h2>Filtros de PDV</h2>
-      <label>Grupo de compras</label><select id="grupoFil" onchange="cambiarFiltro('grupo',this.value)"></select>
-      <label>Canal</label><select id="canalFil" onchange="cambiarFiltro('channel',this.value)"></select>
-      <label>Región</label><select id="regionFil" onchange="cambiarFiltro('region',this.value)"></select>
-      <label>Población</label><select id="pobFil" onchange="cambiarFiltro('poblacion',this.value)"></select>
-      <label>Potencial Cliente</label><select id="potFil" onchange="cambiarFiltro('potencial',this.value)"></select>
-      <button class="btn-limpiar" onclick="limpiarFiltros()">Limpiar filtros</button>
-    </div>
+          <label for="grupoFilter">Grupo de compras</label>
+          <select id="grupoFilter" onchange="cambiarFiltro('grupo', this.value)"></select>
+
+          <label for="channelFilter">Canal</label>
+          <select id="channelFilter" onchange="cambiarFiltro('channel', this.value)"></select>
+
+          <label for="regionFilter">Región</label>
+          <select id="regionFilter" onchange="cambiarFiltro('region', this.value)"></select>
+
+          <label for="poblacionFilter">Población</label>
+          <select id="poblacionFilter" onchange="cambiarFiltro('poblacion', this.value)"></select>
+
+          <label for="potencialFilter">Potencial Cliente</label>
+          <select id="potencialFilter" onchange="cambiarFiltro('potencial', this.value)"></select>
+
+          <button class="btn-limpiar" onclick="limpiarFiltros()">Limpiar filtros</button>
+        </div>
 
     <div class="seccion leyenda">
       <h2>Capa de bricks</h2>
@@ -210,43 +223,29 @@ header .acc{margin-left:auto;display:flex;gap:8px}
     </div>
   </main>
 
-  <aside class="card charts">
-    <div class="chart-bloque" id="bqTend" style="display:none">
-      <h2>Tendencia mensual del producto</h2>
-      <div class="chart-hint" id="tendHint"></div>
-      <div class="mes-grid" id="tendGrid"></div>
+      <aside class="card charts">
+        <div class="chart-bloque">
+          <h2>Top 10 PDV por Sell Out</h2>
+          <div class="chart-hint">Clic para localizar en el mapa</div>
+          <div id="chartTopPdv"></div>
+        </div>
+        <div class="chart-bloque">
+          <h2>Sell Out por canal</h2>
+          <div class="chart-hint">Clic en una barra para filtrar</div>
+          <div id="chartCanal"></div>
+        </div>
+        <div class="chart-bloque">
+          <h2>Top 10 grupos por Sell Out</h2>
+          <div class="chart-hint">Clic en una barra para filtrar</div>
+          <div id="chartGrupo"></div>
+        </div>
+        <div class="chart-bloque">
+          <h2>Sell Out por región</h2>
+          <div class="chart-hint">Clic en una barra para filtrar</div>
+          <div id="chartRegion"></div>
+        </div>
+      </aside>
     </div>
-
-    <div class="chart-bloque" id="bqBrecha" style="display:none">
-      <h2>Brechas de oportunidad</h2>
-      <div class="chart-hint">PDV de alto volumen que NO venden este producto</div>
-      <div id="chartBrecha"></div>
-    </div>
-
-    <div class="chart-bloque" id="bqDetalle" style="display:none">
-      <h2><span id="detTit">Portafolio</span><span class="cerrar" onclick="cerrarDetalle()">cerrar</span></h2>
-      <div class="chart-hint" id="detHint"></div>
-      <div id="chartDetalle"></div>
-    </div>
-
-    <div class="chart-bloque">
-      <h2 id="tituloTop">Top 10 PDV por Sell Out</h2>
-      <div class="chart-hint">Clic para localizar en el mapa</div>
-      <div id="chartTop"></div>
-    </div>
-    <div class="chart-bloque" id="bqPort">
-      <h2>Portafolio · Top 12 productos</h2>
-      <div class="chart-hint">Clic en un producto para analizarlo</div>
-      <div id="chartPort"></div>
-    </div>
-    <div class="chart-bloque"><h2>Sell Out por canal</h2>
-      <div class="chart-hint">Clic para filtrar</div><div id="chartCanal"></div></div>
-    <div class="chart-bloque"><h2>Top 10 grupos</h2>
-      <div class="chart-hint">Clic para filtrar</div><div id="chartGrupo"></div></div>
-    <div class="chart-bloque"><h2>Sell Out por región</h2>
-      <div class="chart-hint">Clic para filtrar</div><div id="chartRegion"></div></div>
-  </aside>
-</div>
 
 <script>
 /* ═══════════ Configuración ═══════════ */
@@ -266,269 +265,371 @@ function em(m){var p=m.split('-');return MESN[Number(p[1])-1]+' '+p[0].slice(2)}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
   .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
-/* ═══════════ Estado ═══════════ */
-var puntosG=[],bricksG=[],ventasG={},productosG={};
-var mesesD=[],mesesSel={},idxSel={};
-var busD=[],buSel='TODAS';
-var skuSel='',distSku=null,cargandoSku=false;
-var filtros={grupo:'TODOS',channel:'TODOS',region:'TODOS',poblacion:'TODOS',potencial:'TODOS'};
-var listo={puntos:false,bricks:false,ventas:false,port:false};
-var modoColor='rendimiento',asignado=false;
-var capaBrick={},agBricks={},marcIdx={},pdvIdx={},bbBricks=null;
+      /* ================= Estado ================= */
+      var puntosGlobales = [], bricksGlobales = [], ventasGlobales = {};
+      var mesesDisponibles = [], mesesSel = {};
+      var statsPuntos = null, statsBricks = null, statsVentas = null;
+      var filtros = { grupo: 'TODOS', channel: 'TODOS', region: 'TODOS', poblacion: 'TODOS', potencial: 'TODOS' };
+      var listo = { puntos: false, bricks: false, ventas: false };   // resuelto (con éxito o error)
+      var modoColor = 'rendimiento';
+      var asignacionHecha = false;
 
-var map=L.map('map',{preferCanvas:true}).setView([4.5709,-74.2973],6);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-var lienzo=L.canvas({padding:.4});
-var bLayer=L.layerGroup().addTo(map);
-var pLayer=L.layerGroup().addTo(map);
+      var capaPorBrick = {}, agregadoBricks = {}, marcadoresPorIdx = {};
+      var boundsBricks = null;
 
-function avisar(m,g){var c=document.getElementById('avisos');c.style.display='flex';
-  var d=document.createElement('div');d.className='aviso'+(g?' grave':'');d.innerText=m;c.appendChild(d)}
-function esGas(){return typeof google!=='undefined'&&google.script&&google.script.run}
-function me(e){return e&&e.message?e.message:String(e)}
+      /* ================= Mapa base ================= */
+      var map = L.map('map', { preferCanvas: true }).setView([4.5709, -74.2973], 6);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+      }).addTo(map);
 
-/* ═══════════ Carga ═══════════ */
-if(esGas()){
-  google.script.run.withSuccessHandler(function(j){recPuntos(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('PDV: '+me(e),true);listo.puntos=true;boot()}).getPuntosJson();
-  google.script.run.withSuccessHandler(function(j){recBricks(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Bricks: '+me(e),true);listo.bricks=true;boot()}).getBricksJson();
-  google.script.run.withSuccessHandler(function(j){recVentas(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Sell Out: '+me(e),true);listo.ventas=true;boot()}).getVentasJson();
-  google.script.run.withSuccessHandler(function(j){recPort(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Portafolio: '+me(e));listo.port=true;boot()}).getPortafolioJson();
-}else{
-  setTimeout(function(){
-    recPuntos({puntos:[
-      {id:'1',posId:'11026727_ZO',name:'Bella Piel Armenia',grupo:'BELLA PIEL',channel:'Ph Independents',
-       region:'EJE CAFETERO',poblacion:'Armenia',potencial:'A',direccion:'Cc Único',brickCrm:'',lat:4.5339,lng:-75.6811},
-      {id:'2',posId:'11026727_ZC',name:'Bella Piel Country',grupo:'BELLA PIEL',channel:'Corporations',
-       region:'BOGOTÁ',poblacion:'Bogota',potencial:'AA',direccion:'Cl 85',brickCrm:'',lat:4.6700,lng:-74.0550}],
-      stats:{filas:2,conCoordenada:2,sinCoordenada:0,conPosId:2}});
-    recBricks({bricks:[{brickId:'BOG-001',nombre:'CHICO',zona:'CHAPINERO',ciudad:'BOGOTA',
-      departamento:'BOGOTA D.C.',nombreBrick:'CHAPINERO, CHICO',
-      geometry:{type:'Polygon',coordinates:[[[-74.07,4.65],[-74.04,4.65],[-74.04,4.69],[-74.07,4.69],[-74.07,4.65]]]}}],
-      stats:{filas:1,conGeometria:1,sinGeometria:0}});
-    recVentas({meses:['2026-01','2026-02','2026-03'],pdv:{
-      '11026727_ZO':{bu:{'FOTO':[[0,14,1327060],[1,12,1100000],[2,18,1600000]]}},
-      '11026727_ZC':{bu:{'FOTO':[[0,40,3800000],[1,45,4200000]],'DERMA':[[2,20,1900000]]}}}});
-    recPort({meses:['2026-01','2026-02','2026-03'],productos:{
-      '8429420251984':{d:'FP GEL CREAM SPF50 250ML',bu:'FOTO',f:'',s:[[0,54,5127060],[1,57,5300000],[2,18,1600000]]},
-      '8470001716125':{d:'FP COMPACT ARENA SPF50+ 10G',bu:'FOTO',f:'',s:[[0,6,428670]]}}});
-  },300);
-}
+      var lienzo = L.canvas({ padding: 0.4 });
+      var bricksLayer = L.layerGroup().addTo(map);      // polígonos: capa inferior
+      var puntosLayer = L.layerGroup().addTo(map);      // círculos: encima
 
-function recPuntos(p){
-  puntosG=(p.puntos||[]).filter(function(x){return x.posId&&x.posId!=='0'});
-  listo.puntos=true;boot()}
-function recBricks(p){bricksG=p.bricks||[];listo.bricks=true;boot()}
-function recVentas(p){
-  mesesD=p.meses||[];var pdv=p.pdv||{};ventasG={};var bs={};
-  Object.keys(pdv).forEach(function(pos){var bus=pdv[pos].bu||{};ventasG[pos]=bus;
-    Object.keys(bus).forEach(function(b){bs[b]=1})});
-  busD=Object.keys(bs).sort();llenarBu();
-  // idxSel debe existir antes de marcar ventas como listas y antes de boot().
-  aplicarPreset('TODOS',true);
-  // Si el portafolio llegó primero, se reordena el selector con los meses ya definidos.
-  if(listo.port)llenarSku();
-  listo.ventas=true;boot()}
-// so_portafolio.json del ETL: {meses, sku:{SKU:{desc,familia,bu,serie}}}.
-// Se normaliza al formato interno {d,bu,f,s}; también acepta el formato {productos:{d,bu,f,s}}.
-function recPort(p){
-  var src=p.productos||p.sku||{};productosG={};
-  Object.keys(src).forEach(function(k){var x=src[k]||{};
-    productosG[k]={d:x.d||x.desc||k,bu:String(x.bu||'').trim().toUpperCase(),
-      f:x.f||x.familia||'',s:x.s||x.serie||[]}});
-  llenarSku();listo.port=true;boot()}
+      /* ================= Avisos ================= */
+      function avisar(msg, grave) {
+        var cont = document.getElementById('avisos');
+        cont.style.display = 'flex';
+        var div = document.createElement('div');
+        div.className = 'aviso' + (grave ? ' grave' : '');
+        div.innerText = msg;
+        cont.appendChild(div);
+      }
 
-function boot(){
-  actOverlay();
-  if(listo.bricks&&listo.puntos&&!asignado){
-    asignarBricks();dibujarBricks();asignado=true;
-    if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
-  if(listo.puntos)actualizar();
-  // El portafolio depende de idxSel (definido en recVentas): esperar ambos.
-  if(listo.port&&listo.ventas)dibujarPort()}
+      /* ================= Carga de datos ================= */
+      function esGas() { return typeof google !== 'undefined' && google.script && google.script.run; }
 
-function actOverlay(){
-  var o=document.getElementById('overlay');
-  if(listo.puntos&&listo.bricks&&listo.ventas&&listo.port){o.style.display='none';return}
-  var f=[];if(!listo.puntos)f.push('PDV');if(!listo.bricks)f.push('bricks');
-  if(!listo.ventas)f.push('Sell Out');if(!listo.port)f.push('portafolio');
-  document.getElementById('overlayTexto').innerText='Cargando '+f.join(', ')+'…'}
+      if (esGas()) {
+        google.script.run
+          .withSuccessHandler(function(json) { recibirPuntos(JSON.parse(json)); })
+          .withFailureHandler(function(e) {
+            avisar('No se pudieron cargar los PDV: ' + (e && e.message ? e.message : e), true);
+            listo.puntos = true; despuesDeCarga();
+          })
+          .getPuntosJson();
 
-function abrirDiag(){document.getElementById('modalDiag').style.display='flex';
-  var p=document.getElementById('diagTexto');
-  if(!esGas()){p.innerText='Solo en Apps Script.';return}
-  p.innerText='Consultando…';
-  google.script.run.withSuccessHandler(function(j){p.innerText=JSON.stringify(JSON.parse(j),null,2)})
-    .withFailureHandler(function(e){p.innerText='Error: '+me(e)}).getDiagnosticoJson()}
-function cerrarDiag(){document.getElementById('modalDiag').style.display='none'}
-function centrarBricks(){if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
+        google.script.run
+          .withSuccessHandler(function(json) { recibirBricks(JSON.parse(json)); })
+          .withFailureHandler(function(e) {
+            avisar('No se pudieron cargar los bricks: ' + (e && e.message ? e.message : e), true);
+            listo.bricks = true; despuesDeCarga();
+          })
+          .getBricksJson();
 
-/* ═══════════ Período ═══════════ */
-function recalcIdx(){idxSel={};mesesD.forEach(function(m,i){if(mesesSel[m])idxSel[i]=1})}
-function aplicarPreset(v,silent){
-  document.getElementById('preset').value=v;
-  if(v!=='PERS'){mesesSel={};var n=mesesD.length;
-    if(v==='TODOS')mesesD.forEach(function(m){mesesSel[m]=1});
-    else if(v==='U3'||v==='U6'){var k=v==='U3'?3:6;
-      mesesD.slice(Math.max(0,n-k)).forEach(function(m){mesesSel[m]=1})}
-    else if(v==='ANIO'){var a=String(new Date().getFullYear());
-      mesesD.forEach(function(m){if(m.indexOf(a)===0)mesesSel[m]=1})}}
-  recalcIdx();renderChips();
-  if(!silent&&listo.puntos){actualizar();dibujarPort();refDet();actProducto()}}
-function alternarMes(m){if(mesesSel[m])delete mesesSel[m];else mesesSel[m]=1;
-  document.getElementById('preset').value='PERS';recalcIdx();renderChips();
-  actualizar();dibujarPort();refDet();actProducto()}
-function renderChips(){
-  var c=document.getElementById('chips');c.innerHTML='';
-  if(!mesesD.length){c.innerHTML='<span class="mini">Sin meses</span>';return}
-  mesesD.forEach(function(m){var s=document.createElement('span');
-    s.className='chip'+(mesesSel[m]?' activo':'');s.innerText=em(m);s.title=m;
-    s.onclick=function(){alternarMes(m)};c.appendChild(s)})}
+        google.script.run
+          .withSuccessHandler(function(json) { recibirVentas(JSON.parse(json)); })
+          .withFailureHandler(function(e) {
+            avisar('Sell Out no disponible: ' + (e && e.message ? e.message : e) +
+                   '\nEl visor sigue funcionando sin datos de ventas.');
+            listo.ventas = true; despuesDeCarga();
+          })
+          .getVentasJson();
+      } else {
+        console.log('Modo de prueba local activado.');
+        setTimeout(function() {
+          recibirPuntos({
+            puntos: [
+              { id: '1', idSap: '', posId: '111_S566', name: 'Farmacia Centro', grupo: 'DISTRIBUIDORA PASTEUR S.A.', channel: 'Ph Independents', region: 'BOGOTÁ', poblacion: 'Bogota', potencial: 'AA', afinidad: '1-Platinum', direccion: 'Cra. 7 #12-34', brickCrm: 'BOG-001', lat: 4.5850, lng: -74.0900 },
+              { id: '2', idSap: '', posId: '111_S508', name: 'Droguería Norte', grupo: 'DISTRIBUIDORA PASTEUR S.A.', channel: 'Corporations', region: 'BOGOTÁ', poblacion: 'Bogota', potencial: 'A', afinidad: '', direccion: 'Aut. Norte #100-20', brickCrm: '', lat: 4.6997, lng: -74.0417 },
+              { id: '3', idSap: '', posId: '111_S509', name: 'Pasteur Medellín', grupo: 'LA REBAJA', channel: 'Specialized', region: 'ANTIOQUIA', poblacion: 'Medellin', potencial: 'B', afinidad: '', direccion: 'Cl. 50 #45-12', brickCrm: '', lat: 6.2442, lng: -75.5812 }
+            ],
+            stats: { filas: 4, conCoordenada: 3, sinCoordenada: 1, conPosId: 3 }
+          });
+          recibirBricks({
+            bricks: [{
+              brickId: 'BOG-001', nombre: 'CIUDAD JARDIN', zona: 'ANTONIO NARIÑO', ciudad: 'BOGOTA',
+              departamento: 'BOGOTA D.C.', nombreBrick: 'ANTONIO NARIÑO, CIUDAD JARDIN',
+              geometry: { type: 'Polygon', coordinates: [[[-74.0973, 4.5758], [-74.0849, 4.5758], [-74.0849, 4.5918], [-74.0973, 4.5918], [-74.0973, 4.5758]]] }
+            }],
+            stats: { filas: 1, conGeometria: 1, sinGeometria: 0, erroresMuestra: [] }
+          });
+          recibirVentas({
+            meses: ['2025-11', '2025-12', '2026-01'],
+            ventas: {
+              '111_S566': { m: { '2025-11': { u: 20, a: 900000 }, '2025-12': { u: 25, a: 1200000 }, '2026-01': { u: 28, a: 1238732 } }, bu: { 'OTRO': 1500000, 'FOTO': 900000 } },
+              '111_S508': { m: { '2026-01': { u: 13, a: 523640 } }, bu: { 'OTRO': 77440, 'FOTO': 446200 } },
+              '111_S509': { m: { '2025-12': { u: 40, a: 2500000 }, '2026-01': { u: 85, a: 3912544 } }, bu: { 'PLAT. WATER': 3304090 } }
+            },
+            stats: { filas: 6, ignoradas: 0, posUnicos: 3 }
+          });
+        }, 400);
+      }
 
-function llenarBu(){var s=document.getElementById('buFil');s.innerHTML='';
-  var o=document.createElement('option');o.value='TODAS';o.text='Todas las BU';s.appendChild(o);
-  busD.forEach(function(b){var op=document.createElement('option');op.value=b;op.text=b;s.appendChild(op)});
-  s.value=buSel}
-function cambiarBu(v){buSel=v;llenarSku();actualizar();dibujarPort();refDet();actProducto()}
+      function recibirPuntos(payload) {
+        puntosGlobales = payload.puntos || [];
+        statsPuntos = payload.stats || null;
+        if (statsPuntos && statsPuntos.conPosId === 0) {
+          avisar("Ningún PDV trae 'Nº Oficina Farmacia' (columna detectada: " +
+                 (statsPuntos.columnaPosIdDetectada || '—') + "). Sin esa clave no hay cruce con Sell Out.");
+        }
+        listo.puntos = true;
+        despuesDeCarga();
+      }
 
-/* ═══════════ Selector de producto ═══════════ */
-function normBu(b){return String(b||'').trim().toUpperCase()}
-// Suma todos los meses de la serie sin filtrar por idxSel (orden de respaldo).
-function sumarSerieTotal(s){var a=0;(s||[]).forEach(function(t){a+=t[2]});return a}
+      function recibirBricks(payload) {
+        bricksGlobales = payload.bricks || [];
+        statsBricks = payload.stats || null;
+        if (statsBricks) {
+          if (statsBricks.filas === 0) {
+            avisar("La pestaña 'Bricks' no tiene filas con brick_id.");
+          } else if (statsBricks.conGeometria === 0) {
+            avisar("Se leyeron " + statsBricks.filas + " bricks pero ninguno tiene geometría GeoJSON válida.\n" +
+                   "Revisa la columna 'geometria_geojson'. Usa el botón Diagnóstico para ver un ejemplo.", true);
+          } else if (statsBricks.sinGeometria > 0) {
+            avisar(statsBricks.sinGeometria + " de " + statsBricks.filas + " bricks no tienen geometría legible; se omiten del mapa.");
+          }
+        }
+        listo.bricks = true;
+        despuesDeCarga();
+      }
 
-function llenarSku(){
-  var s=document.getElementById('skuFil');var prev=skuSel;s.innerHTML='';
-  var o=document.createElement('option');o.value='';o.text='— Vista general (sin producto) —';
-  o.selected=true;s.appendChild(o);
-  var sinPeriodo=Object.keys(idxSel).length===0,bs=normBu(buSel);
-  var lista=Object.keys(productosG).map(function(k){
-    var p=productosG[k];
-    return{sku:k,d:p.d||k,bu:p.bu||'',
-      tot:sinPeriodo?sumarSerieTotal(p.s):sumarSerie(p.s).total}})
-    .filter(function(x){return bs==='TODAS'||!x.bu||normBu(x.bu)===bs})
-    .sort(function(a,b){return b.tot-a.tot});
-  lista.forEach(function(x){var op=document.createElement('option');
-    op.value=x.sku;op.text=x.d+(x.bu?' · '+x.bu:'');s.appendChild(op)});
-  s.value=prev;
-  // Si el SKU previo ya no está en la lista, volver explícitamente a la opción vacía
-  // (evita un <select> sin selección, con selectedIndex = -1).
-  if(s.value!==prev||s.selectedIndex<0){skuSel='';s.selectedIndex=0}}
+      function recibirVentas(payload) {
+        ventasGlobales = payload.ventas || {};
+        mesesDisponibles = payload.meses || [];
+        statsVentas = payload.stats || null;
+        aplicarPreset('TODOS', true);
+        if (mesesDisponibles.length === 0) {
+          avisar("La pestaña 'Sell Out 2026' no devolvió meses con datos. Revisa la columna Fecha.");
+        }
+        listo.ventas = true;
+        despuesDeCarga();
+      }
 
-function seleccionarSku(sku){
-  skuSel=sku;document.getElementById('skuFil').value=sku;
-  var banda=document.getElementById('bandaProd');
-  if(!sku){distSku=null;banda.style.display='none';
-    document.getElementById('skuInfo').innerText='';
-    document.getElementById('bqTend').style.display='none';
-    document.getElementById('bqBrecha').style.display='none';
-    document.getElementById('bqPort').style.display='block';
-    document.getElementById('tituloTop').innerText='Top 10 PDV por Sell Out';
-    actualizar();return}
-  var meta=productosG[sku]||{d:sku};
-  banda.style.display='flex';
-  document.getElementById('bandaTxt').innerText='Analizando: '+(meta.d||sku);
-  document.getElementById('skuInfo').innerText='SKU '+sku;
-  document.getElementById('bqPort').style.display='none';
-  document.getElementById('tituloTop').innerText='Top 10 PDV del producto';
-  if(!esGas()){distSku={};actualizar();return}
-  cargandoSku=true;distSku=null;actualizar();
-  google.script.run.withSuccessHandler(function(j){
-      var r=JSON.parse(j);distSku=r.pdv||{};cargandoSku=false;actualizar();actProducto()})
-    .withFailureHandler(function(e){cargandoSku=false;distSku={};
-      avisar('No pude cargar la distribución del producto: '+me(e)+
-        '\nVerifica que el ETL generó so_sku_indice.json.',true);actualizar()})
-    .getDistribucionSkuJson(sku)}
+      // Cada capa se pinta apenas está lista: un fallo en una no bloquea a las demás
+      function despuesDeCarga() {
+        actualizarOverlay();
 
-/* ═══════════ Medidas ═══════════ */
-function sumarSerie(s){var u=0,a=0;(s||[]).forEach(function(t){
-  if(idxSel[t[0]]){u+=t[1];a+=t[2]}});return{unidades:u,total:a}}
+        if (listo.bricks && !asignacionHecha && listo.puntos) {
+          asignarBricks();
+          dibujarBricks();
+          asignacionHecha = true;
+          if (boundsBricks && boundsBricks.isValid()) map.fitBounds(boundsBricks, { padding: [30, 30] });
+        }
+        if (listo.puntos) actualizar();
+      }
 
-function ventaPDV(p){
-  var bus=p.posId?ventasG[p.posId]:null;var u=0,a=0,mc={};
-  if(bus)Object.keys(bus).forEach(function(b){
-    if(buSel!=='TODAS'&&b!==buSel)return;
-    bus[b].forEach(function(t){if(idxSel[t[0]]){u+=t[1];a+=t[2];mc[t[0]]=1}})});
-  var n=Object.keys(idxSel).length;
-  return{total:a,unidades:u,mesesConDato:Object.keys(mc).length,promedio:n>0?a/n:0}}
+      function actualizarOverlay() {
+        var overlay = document.getElementById('overlay');
+        if (listo.puntos && listo.bricks && listo.ventas) {
+          overlay.style.display = 'none';
+        } else {
+          var faltan = [];
+          if (!listo.puntos) faltan.push('puntos de venta');
+          if (!listo.bricks) faltan.push('bricks');
+          if (!listo.ventas) faltan.push('Sell Out');
+          document.getElementById('overlayTexto').innerText = 'Cargando ' + faltan.join(', ') + '…';
+        }
+      }
 
-// Venta del SKU seleccionado en un PDV concreto
-function ventaSku(p){
-  if(!distSku||!p.posId)return{total:0,unidades:0,mesesConDato:0};
-  var s=distSku[p.posId];if(!s)return{total:0,unidades:0,mesesConDato:0};
-  var u=0,a=0,mc=0;
-  s.forEach(function(t){if(idxSel[t[0]]){u+=t[1];a+=t[2];mc++}});
-  return{total:a,unidades:u,mesesConDato:mc}}
+      /* ================= Diagnóstico ================= */
+      function abrirDiagnostico() {
+        document.getElementById('modalDiag').style.display = 'flex';
+        var pre = document.getElementById('diagTexto');
+        if (!esGas()) { pre.innerText = 'Diagnóstico disponible solo dentro de Apps Script.'; return; }
+        pre.innerText = 'Consultando…';
+        google.script.run
+          .withSuccessHandler(function(json) { pre.innerText = JSON.stringify(JSON.parse(json), null, 2); })
+          .withFailureHandler(function(e) { pre.innerText = 'Error: ' + (e && e.message ? e.message : e); })
+          .getDiagnosticoJson();
+      }
+      function cerrarDiagnostico() { document.getElementById('modalDiag').style.display = 'none'; }
 
-function crearEscala(vals){
-  var pos=vals.filter(function(v){return v>0}).sort(function(a,b){return a-b});
-  if(!pos.length)return function(){return SEM.sin};
-  function q(p){return pos[Math.min(pos.length-1,Math.floor(p*pos.length))]}
-  var t1=q(.25),t2=q(.5),t3=q(.75);
-  return function(v){if(!v||v<=0)return SEM.sin;
-    if(v<=t1)return SEM.muybajo;if(v<=t2)return SEM.bajo;
-    if(v<=t3)return SEM.medio;return SEM.alto}}
-function colorCiudad(c){return CIUDADES[(c||'').toUpperCase().trim()]||'#898781'}
+      function centrarEnBricks() {
+        if (boundsBricks && boundsBricks.isValid()) map.fitBounds(boundsBricks, { padding: [30, 30] });
+        else avisar('No hay polígonos de bricks dibujados para centrar.');
+      }
 
-/* ═══════════ PDV → Brick ═══════════ */
-var geomB=[];
-function asignarBricks(){
-  var ids={};geomB=[];
-  bricksG.forEach(function(b){ids[b.brickId.toUpperCase()]=b.brickId;
-    if(!b.geometry)return;
-    var polys=b.geometry.type==='Polygon'?[b.geometry.coordinates]:b.geometry.coordinates;
-    if(!polys.length)return;
-    var mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];
-    polys.forEach(function(p){(p[0]||[]).forEach(function(c){
-      if(c[0]<mn[0])mn[0]=c[0];if(c[0]>mx[0])mx[0]=c[0];
-      if(c[1]<mn[1])mn[1]=c[1];if(c[1]>mx[1])mx[1]=c[1]})});
-    geomB.push({id:b.brickId,polys:polys,bb:[mn[0],mn[1],mx[0],mx[1]]})});
-  puntosG.forEach(function(p){var crm=(p.brickCrm||'').toUpperCase();
-    if(crm&&ids[crm]){p._brick=ids[crm];return}p._brick=pip(p.lng,p.lat)})}
-function pip(x,y){for(var i=0;i<geomB.length;i++){var g=geomB[i],bb=g.bb;
-  if(x<bb[0]||x>bb[2]||y<bb[1]||y>bb[3])continue;
-  for(var j=0;j<g.polys.length;j++){var po=g.polys[j];
-    if(!ring(x,y,po[0]))continue;var h=false;
-    for(var k=1;k<po.length;k++)if(ring(x,y,po[k])){h=true;break}
-    if(!h)return g.id}}return''}
-function ring(x,y,r){var ins=false;
-  for(var i=0,j=r.length-1;i<r.length;j=i++){
-    var xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];
-    if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}return ins}
+      /* ================= Período ================= */
+      function aplicarPreset(valor, silencioso) {
+        document.getElementById('periodoPreset').value = valor;
+        if (valor === 'PERS') { renderChips(); return; }
 
-/* ═══════════ Filtros ═══════════ */
-var DIMS=['grupo','channel','region','poblacion','potencial'];
-function cambiarFiltro(k,v){filtros[k]=v;actualizar();actProducto()}
-function limpiarFiltros(){filtros={grupo:'TODOS',channel:'TODOS',region:'TODOS',
-  poblacion:'TODOS',potencial:'TODOS'};actualizar();actProducto()}
-function pasa(p,ig){for(var i=0;i<DIMS.length;i++){var d=DIMS[i];
-  if(ig===d||filtros[d]==='TODOS')continue;if(p[d]!==filtros[d])return false}return true}
-function cambiarModo(v){modoColor=v;recolorBricks()}
+        mesesSel = {};
+        var n = mesesDisponibles.length;
+        if (valor === 'TODOS') {
+          mesesDisponibles.forEach(function(m) { mesesSel[m] = 1; });
+        } else if (valor === 'U3' || valor === 'U6') {
+          var k = valor === 'U3' ? 3 : 6;
+          mesesDisponibles.slice(Math.max(0, n - k)).forEach(function(m) { mesesSel[m] = 1; });
+        } else if (valor === 'ANIO') {
+          var anio = String(new Date().getFullYear());
+          mesesDisponibles.forEach(function(m) { if (m.indexOf(anio) === 0) mesesSel[m] = 1; });
+        }
+        renderChips();
+        if (!silencioso && listo.puntos) actualizar();
+      }
 
-/* ═══════════ Actualización global ═══════════ */
-function actualizar(){
-  var cnt={};DIMS.forEach(function(d){cnt[d]={}});
-  puntosG.forEach(function(p){DIMS.forEach(function(d){
-    if(pasa(p,d))cnt[d][p[d]]=(cnt[d][p[d]]||0)+1})});
-  DIMS.forEach(function(d){if(filtros[d]!=='TODOS'&&!cnt[d][filtros[d]])filtros[d]='TODOS'});
-  var vis=puntosG.filter(function(p){return pasa(p,null)});
-  var vv=vis.map(ventaPDV);
+      function alternarMes(m) {
+        if (mesesSel[m]) delete mesesSel[m]; else mesesSel[m] = 1;
+        document.getElementById('periodoPreset').value = 'PERS';
+        renderChips();
+        actualizar();
+      }
 
-  llenarSel('grupoFil',cnt.grupo,filtros.grupo,'Todos los grupos');
-  llenarSel('canalFil',cnt.channel,filtros.channel,'Todos los canales');
-  llenarSel('regionFil',cnt.region,filtros.region,'Todas las regiones');
-  llenarSel('pobFil',cnt.poblacion,filtros.poblacion,'Todas las poblaciones');
-  llenarSel('potFil',cnt.potencial,filtros.potencial,'Todos los potenciales');
+      function renderChips() {
+        var cont = document.getElementById('chipsMeses');
+        cont.innerHTML = '';
+        if (mesesDisponibles.length === 0) {
+          cont.innerHTML = '<span class="mini">Sin meses cargados</span>';
+          return;
+        }
+        mesesDisponibles.forEach(function(m) {
+          var chip = document.createElement('span');
+          chip.className = 'chip' + (mesesSel[m] ? ' activo' : '');
+          chip.innerText = etiquetaMes(m);
+          chip.title = m;
+          chip.onclick = function() { alternarMes(m); };
+          cont.appendChild(chip);
+        });
+      }
 
-  agBricks={};
-  vis.forEach(function(p,i){if(!p._brick)return;
-    var s=agBricks[p._brick];if(!s)s=agBricks[p._brick]={total:0,pdvs:[]};
-    s.total+=vv[i].total;s.pdvs.push({p:p,v:vv[i]})});
-  Object.keys(agBricks).forEach(function(id){
-    agBricks[id].pdvs.sort(function(a,b){return b.v.total-a.v.total})});
+      /* ================= Sell Out por PDV ================= */
+      function ventaPDV(p) {
+        var v = p.posId ? ventasGlobales[p.posId] : null;
+        var total = 0, unidades = 0, conDato = 0;
+        if (v) {
+          for (var m in mesesSel) {
+            var s = v.m[m];
+            if (s) { total += s.a; unidades += s.u; conDato++; }
+          }
+        }
+        var nMeses = Object.keys(mesesSel).length;
+        return { total: total, unidades: unidades, mesesConDato: conDato, promedio: nMeses > 0 ? total / nMeses : 0 };
+      }
+
+      /* ================= Escala semafórica ================= */
+      function crearEscala(valores) {
+        var positivos = valores.filter(function(v) { return v > 0; }).sort(function(a, b) { return a - b; });
+        if (positivos.length === 0) return function() { return SEM.sin; };
+        function q(p) { return positivos[Math.min(positivos.length - 1, Math.floor(p * positivos.length))]; }
+        var t1 = q(0.25), t2 = q(0.5), t3 = q(0.75);
+        return function(v) {
+          if (!v || v <= 0) return SEM.sin;
+          if (v <= t1) return SEM.muybajo;
+          if (v <= t2) return SEM.bajo;
+          if (v <= t3) return SEM.medio;
+          return SEM.alto;
+        };
+      }
+
+      function colorCiudad(c) {
+        return COLORES_CIUDAD[(c || '').toString().toUpperCase().trim()] || COLOR_CIUDAD_DEFAULT;
+      }
+
+      /* ================= Asignación PDV → Brick ================= */
+      var geomBricks = [];
+
+      function asignarBricks() {
+        var idsConocidos = {};
+        geomBricks = [];
+
+        bricksGlobales.forEach(function(b) {
+          idsConocidos[b.brickId.toUpperCase()] = b.brickId;
+          if (!b.geometry) return;
+          var polys = [];
+          if (b.geometry.type === 'Polygon') polys = [b.geometry.coordinates];
+          else if (b.geometry.type === 'MultiPolygon') polys = b.geometry.coordinates;
+          if (polys.length === 0) return;
+
+          var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          polys.forEach(function(poly) {
+            (poly[0] || []).forEach(function(c) {
+              if (c[0] < minX) minX = c[0]; if (c[0] > maxX) maxX = c[0];
+              if (c[1] < minY) minY = c[1]; if (c[1] > maxY) maxY = c[1];
+            });
+          });
+          geomBricks.push({ id: b.brickId, polys: polys, bbox: [minX, minY, maxX, maxY] });
+        });
+
+        puntosGlobales.forEach(function(p) {
+          var crm = (p.brickCrm || '').toString().trim().toUpperCase();
+          if (crm && idsConocidos[crm]) { p._brick = idsConocidos[crm]; return; }
+          p._brick = brickPorCoordenada(p.lng, p.lat);
+        });
+      }
+
+      function brickPorCoordenada(lng, lat) {
+        for (var i = 0; i < geomBricks.length; i++) {
+          var g = geomBricks[i], bb = g.bbox;
+          if (lng < bb[0] || lng > bb[2] || lat < bb[1] || lat > bb[3]) continue;
+          for (var j = 0; j < g.polys.length; j++) {
+            var poly = g.polys[j];
+            if (!enAnillo(lng, lat, poly[0])) continue;
+            var enHueco = false;
+            for (var h = 1; h < poly.length; h++) {
+              if (enAnillo(lng, lat, poly[h])) { enHueco = true; break; }
+            }
+            if (!enHueco) return g.id;
+          }
+        }
+        return '';
+      }
+
+      function enAnillo(x, y, anillo) {
+        var dentro = false;
+        for (var i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+          var xi = anillo[i][0], yi = anillo[i][1];
+          var xj = anillo[j][0], yj = anillo[j][1];
+          if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) dentro = !dentro;
+        }
+        return dentro;
+      }
+
+      /* ================= Filtros ================= */
+      var DIMS = ['grupo', 'channel', 'region', 'poblacion', 'potencial'];
+
+      function cambiarFiltro(clave, valor) { filtros[clave] = valor; actualizar(); }
+
+      function limpiarFiltros() {
+        filtros = { grupo: 'TODOS', channel: 'TODOS', region: 'TODOS', poblacion: 'TODOS', potencial: 'TODOS' };
+        actualizar();
+      }
+
+      function pasaFiltros(p, ignorar) {
+        for (var i = 0; i < DIMS.length; i++) {
+          var d = DIMS[i];
+          if (ignorar === d || filtros[d] === 'TODOS') continue;
+          if (p[d] !== filtros[d]) return false;
+        }
+        return true;
+      }
+
+      function cambiarModoColor(v) { modoColor = v; recolorearBricks(); }
+
+      /* ================= Actualización global ================= */
+      function actualizar() {
+        var counts = {};
+        DIMS.forEach(function(d) { counts[d] = {}; });
+        puntosGlobales.forEach(function(p) {
+          DIMS.forEach(function(dim) {
+            if (pasaFiltros(p, dim)) counts[dim][p[dim]] = (counts[dim][p[dim]] || 0) + 1;
+          });
+        });
+        DIMS.forEach(function(dim) {
+          if (filtros[dim] !== 'TODOS' && !counts[dim][filtros[dim]]) filtros[dim] = 'TODOS';
+        });
+
+        var visibles = puntosGlobales.filter(function(p) { return pasaFiltros(p, null); });
+        var vv = visibles.map(ventaPDV);
+
+        llenarSelect('grupoFilter', counts.grupo, filtros.grupo, 'Todos los grupos');
+        llenarSelect('channelFilter', counts.channel, filtros.channel, 'Todos los canales');
+        llenarSelect('regionFilter', counts.region, filtros.region, 'Todas las regiones');
+        llenarSelect('poblacionFilter', counts.poblacion, filtros.poblacion, 'Todas las poblaciones');
+        llenarSelect('potencialFilter', counts.potencial, filtros.potencial, 'Todos los potenciales');
+
+        agregadoBricks = {};
+        visibles.forEach(function(p, i) {
+          if (!p._brick) return;
+          var slot = agregadoBricks[p._brick];
+          if (!slot) slot = agregadoBricks[p._brick] = { total: 0, pdvs: [] };
+          slot.total += vv[i].total;
+          slot.pdvs.push({ p: p, venta: vv[i] });
+        });
+        Object.keys(agregadoBricks).forEach(function(id) {
+          agregadoBricks[id].pdvs.sort(function(a, b) { return b.venta.total - a.venta.total; });
+        });
 
   if(skuSel)kpisProducto(vis);else kpisGeneral(vis,vv);
   recolorBricks();dibujarPuntos(vis,vv);dibujarTop(vis,vv);
@@ -536,353 +637,354 @@ function actualizar(){
   barras('chartGrupo',agVentas(vis,vv,'grupo'),'grupo',10);
   barras('chartRegion',agVentas(vis,vv,'region'),'region',10)}
 
-function agVentas(ps,vv,d){var a={},n={};
-  ps.forEach(function(p,i){a[p[d]]=(a[p[d]]||0)+vv[i].total;n[p[d]]=(n[p[d]]||0)+1});
-  return Object.keys(a).map(function(k){return{clave:k,n:a[k],pdvs:n[k]}})
-    .sort(function(a,b){return b.n-a.n})}
+      function agruparVentas(puntos, vv, dim) {
+        var acc = {}, n = {};
+        puntos.forEach(function(p, i) {
+          acc[p[dim]] = (acc[p[dim]] || 0) + vv[i].total;
+          n[p[dim]] = (n[p[dim]] || 0) + 1;
+        });
+        return Object.keys(acc)
+          .map(function(k) { return { clave: k, n: acc[k], pdvs: n[k] }; })
+          .sort(function(a, b) { return b.n - a.n; });
+      }
 
-/* ═══════════ KPIs ═══════════ */
-function kpi(label,valor,hint,prod){
-  return'<div class="card kpi'+(prod?' modo-prod':'')+'"><div class="label">'+label+
-    '</div><div class="value">'+valor+'</div><div class="hint">'+hint+'</div></div>'}
+      /* ================= KPIs ================= */
+      function actualizarKpis(visibles, vv) {
+        var total = 0, conVentas = 0;
+        vv.forEach(function(v) { total += v.total; if (v.total > 0) conVentas++; });
+        var nMeses = Object.keys(mesesSel).length;
 
-function kpisGeneral(vis,vv){
-  var tot=0,uni=0,con=0;
-  vv.forEach(function(v){tot+=v.total;uni+=v.unidades;if(v.total>0)con++});
-  var nm=Object.keys(idxSel).length;
-  document.getElementById('kpis').innerHTML=
-    kpi('PDV con Sell Out',FMT.format(con),'de '+FMT.format(vis.length)+' PDV visibles')+
-    kpi('Sell Out (período)',fc(tot),nm+(nm===1?' mes':' meses')+(buSel!=='TODAS'?' · '+buSel:''))+
-    kpi('Promedio mensual',nm>0?fc(tot/nm):'–','Sell Out / mes')+
-    kpi('Unidades',FMT.format(Math.round(uni)),'unidades del período')}
+        document.getElementById('kpiVisibles').innerText = FMT.format(visibles.length);
+        document.getElementById('kpiVisiblesHint').innerText =
+          'de ' + FMT.format(puntosGlobales.length) + ' georreferenciados' +
+          (statsPuntos && statsPuntos.sinCoordenada ? ' · ' + FMT.format(statsPuntos.sinCoordenada) + ' sin coordenada' : '');
 
-function kpisProducto(vis){
-  var meta=productosG[skuSel]||{d:skuSel};
-  if(cargandoSku||!distSku){
-    document.getElementById('kpis').innerHTML=kpi('Producto','…','Consultando distribución…',true);return}
-  var tot=0,uni=0,con=0;
-  vis.forEach(function(p){var s=ventaSku(p);
-    if(s.total>0||s.unidades>0){con++;tot+=s.total;uni+=s.unidades}});
-  var nm=Object.keys(idxSel).length;
-  var cob=vis.length?100*con/vis.length:0;
-  var precio=uni>0?tot/uni:0;
-  var rot=(con>0&&nm>0)?uni/con/nm:0;
-  document.getElementById('kpis').innerHTML=
-    kpi('Sell Out del producto',fc(tot),esc(meta.d||skuSel),true)+
-    kpi('Cobertura',cob.toFixed(1)+'%',FMT.format(con)+' de '+FMT.format(vis.length)+' PDV lo venden',true)+
-    kpi('Rotación',rot.toFixed(1),'unidades / PDV / mes',true)+
-    kpi('Precio promedio',fd(precio),'ponderado por volumen',true)+
-    kpi('Unidades',FMT.format(Math.round(uni)),'del período',true)}
+        document.getElementById('kpiSellout').innerText = fmtCompacto(total);
+        document.getElementById('kpiSelloutHint').innerText =
+          nMeses + (nMeses === 1 ? ' mes seleccionado' : ' meses seleccionados');
 
-/* ═══════════ Selects ═══════════ */
-function llenarSel(id,cnt,sel,txt){
-  var s=document.getElementById(id);s.innerHTML='';
-  var tot=0;Object.keys(cnt).forEach(function(k){tot+=cnt[k]});
-  var o=document.createElement('option');o.value='TODOS';
-  o.text=txt+' ('+FMT.format(tot)+')';s.appendChild(o);
-  Object.keys(cnt).sort().forEach(function(op){if(!op)return;
-    var opt=document.createElement('option');opt.value=op;
-    opt.text=op+' ('+FMT.format(cnt[op])+')';if(op===sel)opt.selected=true;s.appendChild(opt)});
-  s.value=sel;if(s.value!==sel)s.value='TODOS'}
+        document.getElementById('kpiPromedio').innerText = nMeses > 0 ? fmtCompacto(total / nMeses) : '–';
+        document.getElementById('kpiPromedioHint').innerText = 'Sell Out / mes en la selección';
 
-/* ═══════════ Barras ═══════════ */
-function pintarBarras(id,datos,ops){
-  ops=ops||{};var c=document.getElementById(id);c.innerHTML='';
-  var cv=datos.filter(function(d){return d.n>0});
-  if(!cv.length){c.innerHTML='<div class="chart-hint">'+(ops.vacio||'Sin datos')+'</div>';return}
-  var top=ops.topN||0,mos=top>0?cv.slice(0,top):cv,mx=mos[0].n;
-  mos.forEach(function(d){
-    var f=document.createElement('div');
-    f.className='barra-fila'+(d.clase?' '+d.clase:'');
-    if(d.tit)f.title=d.tit;if(d.fn)f.onclick=d.fn;else f.style.cursor='default';
-    var cat=document.createElement('div');cat.className='cat';cat.innerText=d.clave;
-    var val=document.createElement('div');val.className='valor';val.innerText=d.etq||fc(d.n);
-    var pi=document.createElement('div');pi.className='barra-pista';
-    var re=document.createElement('div');re.className='barra-relleno';
-    re.style.width=Math.max(2,Math.round(100*d.n/mx))+'%';
-    pi.appendChild(re);f.appendChild(cat);f.appendChild(val);f.appendChild(pi);c.appendChild(f)});
-  if(top>0&&cv.length>top){var r=cv.slice(top).reduce(function(s,d){return s+d.n},0);
-    var n=document.createElement('div');n.className='chart-hint';
-    n.innerText='+ '+FMT.format(cv.length-top)+' más ('+fc(r)+')';c.appendChild(n)}}
+        var pct = visibles.length > 0 ? Math.round(100 * conVentas / visibles.length) : 0;
+        document.getElementById('kpiConVentas').innerText = pct + '%';
+        document.getElementById('kpiConVentasHint').innerText =
+          FMT.format(conVentas) + ' PDV con Sell Out en el período';
+      }
 
-function barras(id,datos,dim,top){
-  var hs=filtros[dim]!=='TODOS';
-  pintarBarras(id,datos.map(function(d){return{clave:d.clave,n:d.n,
-    clase:hs?(d.clave===filtros[dim]?'activa':'apagada'):'',
-    tit:d.clave+': '+fd(d.n)+' · '+FMT.format(d.pdvs)+' PDV',
-    fn:function(){cambiarFiltro(dim,filtros[dim]===d.clave?'TODOS':d.clave)}}}),
-    {topN:top,vacio:'Sin Sell Out en la selección'})}
+      /* ================= Selects ================= */
+      function llenarSelect(id, counts, seleccionado, textoTodos) {
+        var select = document.getElementById(id);
+        select.innerHTML = '';
 
-/* ═══════════ Top PDV ═══════════ */
-function dibujarTop(vis,vv){
-  var dat;
-  if(skuSel&&distSku){
-    dat=vis.map(function(p,i){return{p:p,s:ventaSku(p),idx:i}})
-      .filter(function(x){return x.s.total>0})
-      .sort(function(a,b){return b.s.total-a.s.total}).slice(0,10)
-      .map(function(x){return{clave:x.p.name,n:x.s.total,clase:'prod',
-        tit:x.p.name+' · '+fd(x.s.total)+' · '+FMT.format(Math.round(x.s.unidades))+' und.',
-        fn:function(){map.setView([x.p.lat,x.p.lng],16);
-          var m=marcIdx[x.idx];if(m)m.openPopup()}}});
-  }else{
-    dat=vis.map(function(p,i){return{p:p,v:vv[i],idx:i}})
-      .filter(function(x){return x.v.total>0})
-      .sort(function(a,b){return b.v.total-a.v.total}).slice(0,10)
-      .map(function(x){return{clave:x.p.name,n:x.v.total,
-        tit:x.p.name+' · '+fd(x.v.total)+' · Potencial '+x.p.potencial,
-        fn:function(){map.setView([x.p.lat,x.p.lng],16);
-          var m=marcIdx[x.idx];if(m)m.openPopup();verPortPdv(x.p)}}})}
-  pintarBarras('chartTop',dat,{vacio:'Sin Sell Out en la selección'})}
+        var total = 0;
+        Object.keys(counts).forEach(function(k) { total += counts[k]; });
 
-/* ═══════════ Portafolio global ═══════════ */
-function dibujarPort(){
-  // Sin Sell Out no hay idxSel: dibujar ahora dejaría el panel en "Sin datos".
-  if(!listo.ventas||!listo.port)return;
-  var bs=normBu(buSel);
-  var dat=Object.keys(productosG).map(function(sku){
-    var pr=productosG[sku];
-    if(bs!=='TODAS'&&pr.bu&&normBu(pr.bu)!==bs)return null;
-    var s=sumarSerie(pr.s);
-    return{clave:pr.d||sku,n:s.total,
-      tit:(pr.d||sku)+'\nSKU '+sku+(pr.bu?' · '+pr.bu:'')+'\n'+fd(s.total)+
-        ' · '+FMT.format(Math.round(s.unidades))+' und.\nClic para analizar este producto',
-      fn:function(){seleccionarSku(sku)}}
-  }).filter(Boolean).sort(function(a,b){return b.n-a.n});
-  pintarBarras('chartPort',dat,{topN:12,vacio:'Sin datos'})}
+        var optTodos = document.createElement('option');
+        optTodos.value = 'TODOS';
+        optTodos.text = textoTodos + ' (' + FMT.format(total) + ')';
+        select.appendChild(optTodos);
 
-/* ═══════════ Panel de producto: tendencia y brechas ═══════════ */
-function actProducto(){
-  if(!skuSel||!distSku){document.getElementById('bqTend').style.display='none';
-    document.getElementById('bqBrecha').style.display='none';return}
-  var meta=productosG[skuSel]||{d:skuSel};
-  var vis=puntosG.filter(function(p){return pasa(p,null)});
+        Object.keys(counts).sort().forEach(function(op) {
+          if (op === '') return;
+          var opt = document.createElement('option');
+          opt.value = op;
+          opt.text = op + ' (' + FMT.format(counts[op]) + ')';
+          if (op === seleccionado) opt.selected = true;
+          select.appendChild(opt);
+        });
 
-  // Tendencia mensual (unidades por mes del SKU en los PDV visibles)
-  var porMes={};
-  vis.forEach(function(p){
-    var s=distSku[p.posId];if(!s)return;
-    s.forEach(function(t){if(!idxSel[t[0]])return;
-      if(!porMes[t[0]])porMes[t[0]]=[0,0];
-      porMes[t[0]][0]+=t[1];porMes[t[0]][1]+=t[2]})});
-  var idxs=Object.keys(porMes).map(Number).sort(function(a,b){return a-b});
-  var g=document.getElementById('tendGrid');g.innerHTML='';
-  if(idxs.length){
-    var mx=Math.max.apply(null,idxs.map(function(i){return porMes[i][1]}));
-    idxs.forEach(function(i){
-      var col=document.createElement('div');col.className='mes-col';
-      var bar=document.createElement('div');bar.className='mes-bar';
-      bar.style.height=Math.max(2,Math.round(100*porMes[i][1]/mx))+'%';
-      bar.title=em(mesesD[i])+': '+fd(porMes[i][1])+' · '+
-        FMT.format(Math.round(porMes[i][0]))+' und.';
-      var lbl=document.createElement('div');lbl.className='mes-lbl';
-      lbl.innerText=em(mesesD[i]).split(' ')[0];
-      col.appendChild(bar);col.appendChild(lbl);g.appendChild(col)});
-    document.getElementById('tendHint').innerText=esc(meta.d||skuSel);
-    document.getElementById('bqTend').style.display='block';
-  }else document.getElementById('bqTend').style.display='none';
+        select.value = seleccionado;
+        if (select.value !== seleccionado) select.value = 'TODOS';
+      }
 
-  // Brechas: PDV con alto Sell Out total que NO venden este producto
-  var brechas=vis.map(function(p){return{p:p,v:ventaPDV(p),s:ventaSku(p)}})
-    .filter(function(x){return x.v.total>0&&x.s.total===0})
-    .sort(function(a,b){return b.v.total-a.v.total}).slice(0,10)
-    .map(function(x){return{clave:x.p.name,n:x.v.total,clase:'brecha',
-      tit:x.p.name+'\nSell Out total: '+fd(x.v.total)+
-        '\nPotencial: '+x.p.potencial+'\nNO vende '+(meta.d||skuSel),
-      fn:function(){map.setView([x.p.lat,x.p.lng],16)}}});
-  pintarBarras('chartBrecha',brechas,{vacio:'Todos los PDV de volumen ya venden el producto'});
-  document.getElementById('bqBrecha').style.display='block'}
+      /* ================= Barras ================= */
+      function dibujarBarras(contenedorId, datos, dim, topN) {
+        var cont = document.getElementById(contenedorId);
+        cont.innerHTML = '';
+        var conValor = datos.filter(function(d) { return d.n > 0; });
+        if (conValor.length === 0) {
+          cont.innerHTML = '<div class="chart-hint">Sin Sell Out en la selección</div>';
+          return;
+        }
 
-/* ═══════════ Detalle por PDV ═══════════ */
-var detActual=null;
-function mostrarDetalle(t,h,p){detActual={t:t,h:h,p:p};
-  document.getElementById('bqDetalle').style.display='block';
-  document.getElementById('detTit').innerText=t;
-  document.getElementById('detHint').innerText=h;refDet();
-  document.querySelector('.charts').scrollTop=0}
-function refDet(){
-  if(!detActual)return;var ps=detActual.p;
-  if(!ps){document.getElementById('chartDetalle').innerHTML=
-    '<div class="chart-hint">Consultando…</div>';return}
-  var dat=Object.keys(ps).map(function(sku){
-    var m=productosG[sku]||{d:sku,bu:''};
-    if(normBu(buSel)!=='TODAS'&&m.bu&&normBu(m.bu)!==normBu(buSel))return null;
-    var s=sumarSerie(ps[sku]);
-    return{clave:m.d||sku,n:s.total,
-      tit:(m.d||sku)+' · '+fd(s.total)+' · '+FMT.format(Math.round(s.unidades))+' und.'+
-        '\nClic para analizar este producto en el mapa',
-      fn:function(){seleccionarSku(sku)}}
-  }).filter(Boolean).sort(function(a,b){return b.n-a.n});
-  pintarBarras('chartDetalle',dat,{topN:15,vacio:'Sin ventas en el período'})}
-function cerrarDetalle(){detActual=null;document.getElementById('bqDetalle').style.display='none'}
+        var mostrar = topN > 0 ? conValor.slice(0, topN) : conValor;
+        var max = mostrar[0].n;
+        var haySeleccion = filtros[dim] !== 'TODOS';
 
-function verPortPdv(p){
-  if(!esGas()){mostrarDetalle('Portafolio · '+p.name,'Modo local',{});return}
-  mostrarDetalle('Portafolio · '+p.name,'Consultando…',null);
-  google.script.run.withSuccessHandler(function(j){var r=JSON.parse(j);
-      mostrarDetalle('Portafolio · '+p.name,'POS_ID '+r.posId,r.productos||{})})
-    .withFailureHandler(function(e){mostrarDetalle('Portafolio · '+p.name,'Error: '+me(e),{})})
-    .getDetallePdvJson(p.posId)}
+        mostrar.forEach(function(d) {
+          var fila = document.createElement('div');
+          fila.className = 'barra-fila';
+          if (haySeleccion) fila.className += (d.clave === filtros[dim]) ? ' activa' : ' apagada';
+          fila.title = d.clave + ': ' + fmtDinero(d.n) + ' · ' + FMT.format(d.pdvs) + ' PDV';
+          fila.onclick = function() { cambiarFiltro(dim, (filtros[dim] === d.clave) ? 'TODOS' : d.clave); };
 
-function verPortBrick(bid){
-  var agg=agBricks[bid];if(!agg||!agg.pdvs.length){avisar('Sin PDV en ese brick.');return}
-  var ids=agg.pdvs.map(function(x){return x.p.posId}).filter(Boolean);
-  if(!ids.length)return;
-  mostrarDetalle('Portafolio · Brick '+bid,'Agregando '+ids.length+' PDV…',null);
-  if(!esGas())return;
-  google.script.run.withSuccessHandler(function(j){var r=JSON.parse(j);
-      mostrarDetalle('Portafolio · Brick '+bid,
-        r.pdvConVentas+' de '+r.pdvConsultados+' PDV con ventas',r.productos||{})})
-    .withFailureHandler(function(e){mostrarDetalle('Portafolio · Brick '+bid,'Error: '+me(e),{})})
-    .getDetalleAgregadoJson(ids.join(','))}
+          var cat = document.createElement('div');
+          cat.className = 'cat'; cat.innerText = d.clave;
 
-/* ═══════════ Bricks ═══════════ */
-function dibujarBricks(){
-  bLayer.clearLayers();capaBrick={};bbBricks=L.latLngBounds([]);var n=0;
-  bricksG.forEach(function(b){if(!b.geometry)return;
-    try{var capa=L.geoJSON(b.geometry,{renderer:lienzo,
-        style:{color:SEM.sin,weight:2,opacity:.9,fillColor:SEM.sin,fillOpacity:.18}});
-      capa.bindPopup(function(){return popupBrick(b)},{maxWidth:320});
-      capa.addTo(bLayer);capaBrick[b.brickId]=capa;bbBricks.extend(capa.getBounds());n++
-    }catch(e){}});
-  bLayer.bringToBack()}
+          var valor = document.createElement('div');
+          valor.className = 'valor'; valor.innerText = fmtCompacto(d.n);
 
-function recolorBricks(){
-  var esc2,porCiudad={};
-  if(skuSel&&distSku){
-    var agSku={};
-    puntosG.filter(function(p){return pasa(p,null)}).forEach(function(p){
-      if(!p._brick)return;var s=ventaSku(p);
-      agSku[p._brick]=(agSku[p._brick]||0)+s.total});
-    esc2=crearEscala(Object.keys(agSku).map(function(k){return agSku[k]}));
-    bricksG.forEach(function(b){var c=capaBrick[b.brickId];if(!c)return;
-      var tot=agSku[b.brickId]||0;var col=modoColor==='ciudad'?colorCiudad(b.ciudad):esc2(tot);
-      if(modoColor==='ciudad')porCiudad[(b.ciudad||'SIN CIUDAD').toUpperCase()]=col;
-      c.setStyle({color:col,fillColor:col,fillOpacity:tot>0?.35:.12,weight:2,opacity:.9})});
-  }else{
-    var tots=Object.keys(agBricks).map(function(id){return agBricks[id].total});
-    esc2=crearEscala(tots);
-    bricksG.forEach(function(b){var c=capaBrick[b.brickId];if(!c)return;
-      var col,op;
-      if(modoColor==='ciudad'){col=colorCiudad(b.ciudad);op=.20;
-        porCiudad[(b.ciudad||'SIN CIUDAD').toUpperCase()]=col}
-      else{var agg=agBricks[b.brickId];var t=agg?agg.total:0;col=esc2(t);op=t>0?.35:.15}
-      c.setStyle({color:col,fillColor:col,fillOpacity:op,weight:2,opacity:.9})})}
-  renderLey(porCiudad)}
+          var pista = document.createElement('div');
+          pista.className = 'barra-pista';
+          var relleno = document.createElement('div');
+          relleno.className = 'barra-relleno';
+          relleno.style.width = Math.max(2, Math.round(100 * d.n / max)) + '%';
+          pista.appendChild(relleno);
 
-function renderLey(pc){
-  var c=document.getElementById('leyBricks');c.innerHTML='';
-  var filas=modoColor==='ciudad'
-    ?Object.keys(pc).sort().map(function(k){return[pc[k],k]})
-    :[[SEM.alto,'Alto (cuartil superior)'],[SEM.medio,'Medio'],[SEM.bajo,'Bajo'],
-      [SEM.muybajo,'Muy bajo (cuartil inferior)'],
-      [SEM.sin,skuSel?'Sin este producto':'Sin ventas en el período']];
-  filas.forEach(function(f){var r=document.createElement('div');r.className='fila';
-    var s=document.createElement('span');s.className='swatch';s.style.background=f[0];
-    r.appendChild(s);r.appendChild(document.createTextNode(f[1]));c.appendChild(r)})}
+          fila.appendChild(cat); fila.appendChild(valor); fila.appendChild(pista);
+          cont.appendChild(fila);
+        });
 
-function popupBrick(b){
-  var agg=agBricks[b.brickId];
-  var h='<div class="popup-brick"><h3>'+esc(b.nombreBrick||b.nombre||b.brickId)+'</h3>'+
-    '<b>Brick ID:</b> '+esc(b.brickId)+'<br>'+
-    '<b>Ciudad:</b> '+esc(b.ciudad||'–')+' · <b>Zona:</b> '+esc(b.zona||'–')+'<br>';
-  if(skuSel&&distSku){
-    var meta=productosG[skuSel]||{d:skuSel};
-    var tot=0,uni=0,con=0,tp=agg?agg.pdvs.length:0;
-    if(agg)agg.pdvs.forEach(function(x){var s=ventaSku(x.p);
-      if(s.total>0){con++;tot+=s.total;uni+=s.unidades}});
-    h+='<div class="popup-sellout prod"><span class="grande">'+fd(tot)+'</span><br>'+
-      '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
-      '<b>Cobertura:</b> '+con+' de '+tp+' PDV ('+(tp?Math.round(100*con/tp):0)+'%)<br>'+
-      '<b>Unidades:</b> '+FMT.format(Math.round(uni))+'</div>';
-  }else if(!agg||!agg.pdvs.length){
-    h+='<div class="popup-sellout">Sin PDV con Sell Out en los filtros actuales.</div>'
-  }else{
-    h+='<div class="popup-sellout"><span class="grande">'+fd(agg.total)+'</span><br>'+
-      '<span class="mini">Sell Out del período · '+FMT.format(agg.pdvs.length)+' PDV</span></div>'+
-      '<b>Top PDV:</b><ol>';
-    agg.pdvs.slice(0,5).forEach(function(x){
-      h+='<li>'+esc(x.p.name)+' <span class="badge-pot">'+esc(x.p.potencial)+'</span><br>'+
-        '<span class="mini">'+fd(x.v.total)+'</span></li>'});
-    h+='</ol>';
-    if(agg.pdvs.length>5)h+='<span class="mini">+ '+FMT.format(agg.pdvs.length-5)+' más</span>';
-    h+='<button class="btn-portafolio" onclick="verPortBrick(\''+
-      esc(b.brickId).replace(/'/g,"\\'")+'\')">Ver portafolio del brick</button>'}
-  return h+'</div>'}
+        if (topN > 0 && conValor.length > topN) {
+          var resto = conValor.slice(topN).reduce(function(s, d) { return s + d.n; }, 0);
+          var nota = document.createElement('div');
+          nota.className = 'chart-hint';
+          nota.innerText = '+ ' + FMT.format(conValor.length - topN) + ' más (' + fmtCompacto(resto) + ')';
+          cont.appendChild(nota);
+        }
+      }
 
-function alternarBricks(){
-  if(document.getElementById('togBricks').checked){map.addLayer(bLayer);bLayer.bringToBack()}
-  else map.removeLayer(bLayer)}
+      /* ================= Top 10 PDV ================= */
+      function dibujarTopPdv(visibles, vv) {
+        var cont = document.getElementById('chartTopPdv');
+        cont.innerHTML = '';
 
-/* ═══════════ Puntos ═══════════ */
-function dibujarPuntos(vis,vv){
-  pLayer.clearLayers();marcIdx={};pdvIdx={};if(!vis.length)return;
-  var verSin=document.getElementById('togSinProd').checked;
-  var modoProd=!!(skuSel&&distSku);
-  var valores=modoProd?vis.map(function(p){return ventaSku(p).total})
-                      :vv.map(function(v){return v.total});
-  var esc2=crearEscala(valores);
-  var mx=valores.reduce(function(m,v){return Math.max(m,v)},0);
-  var bb=L.latLngBounds([]);
+        var ordenados = visibles
+          .map(function(p, i) { return { p: p, v: vv[i], idx: i }; })
+          .filter(function(x) { return x.v.total > 0; })
+          .sort(function(a, b) { return b.v.total - a.v.total; })
+          .slice(0, 10);
 
-  vis.forEach(function(p,i){
-    var val=modoProd?ventaSku(p).total:vv[i].total;
-    if(modoProd&&val<=0&&!verSin)return;
-    var col=esc2(val),r=5;
-    if(mx>0&&val>0)r=5+11*Math.sqrt(val/mx);
-    if(modoProd&&val<=0)r=3.5;
-    var mk=L.circleMarker([p.lat,p.lng],{renderer:lienzo,radius:r,
-      color:'#fff',weight:1,fillColor:col,fillOpacity:(modoProd&&val<=0)?.45:.9});
-    mk.bindPopup(function(){return popupPdv(p,i)},{maxWidth:300});
-    mk.addTo(pLayer);marcIdx[i]=mk;pdvIdx[i]=p;bb.extend([p.lat,p.lng])});
+        if (ordenados.length === 0) {
+          cont.innerHTML = '<div class="chart-hint">Sin Sell Out en la selección</div>';
+          return;
+        }
 
-  if(document.getElementById('togZoom').checked&&bb.isValid())
-    map.fitBounds(bb,{padding:[40,40],maxZoom:15})}
+        var max = ordenados[0].v.total;
+        ordenados.forEach(function(x) {
+          var fila = document.createElement('div');
+          fila.className = 'barra-fila';
+          fila.title = x.p.name + ' · ' + fmtDinero(x.v.total) + ' · Potencial ' + x.p.potencial;
+          fila.onclick = function() {
+            map.setView([x.p.lat, x.p.lng], 16);
+            var m = marcadoresPorIdx[x.idx];
+            if (m) m.openPopup();
+          };
 
-function popupPdv(p,i){
-  var v=ventaPDV(p);var nm=Object.keys(idxSel).length;
-  var h='<div class="popup-pdv"><h3>'+esc(p.name)+
-    '<span class="badge-pot">'+esc(p.potencial)+'</span></h3>';
+          var cat = document.createElement('div');
+          cat.className = 'cat'; cat.innerText = x.p.name;
 
-  if(skuSel&&distSku){
-    var meta=productosG[skuSel]||{d:skuSel};var s=ventaSku(p);
-    var precio=s.unidades>0?s.total/s.unidades:0;
-    var rot=(nm>0&&s.unidades>0)?s.unidades/nm:0;
-    if(s.total>0){
-      h+='<div class="popup-sellout prod">'+
-        '<span class="grande">'+fd(s.total)+'</span><br>'+
-        '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
-        '<b>Unidades:</b> '+FMT.format(Math.round(s.unidades))+'<br>'+
-        '<b>Rotación:</b> '+rot.toFixed(1)+' und./mes<br>'+
-        '<b>Precio prom.:</b> '+fd(precio)+'<br>'+
-        '<b>Meses con venta:</b> '+s.mesesConDato+' de '+nm+'</div>';
-    }else{
-      h+='<div class="popup-sellout prod"><b>NO vende este producto</b><br>'+
-        '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
-        'Sell Out total del PDV: '+fd(v.total)+'</div>'}
-  }else if(ventasG[p.posId]){
-    h+='<div class="popup-sellout"><span class="grande">'+fd(v.promedio)+'</span> / mes<br>'+
-      '<span class="mini">Promedio sobre '+nm+(nm===1?' mes':' meses')+
-      (buSel!=='TODAS'?' · '+esc(buSel):'')+'</span><br>'+
-      '<b>Total período:</b> '+fd(v.total)+'<br>'+
-      '<b>Unidades:</b> '+FMT.format(Math.round(v.unidades))+'</div>';
-    var bus=ventasG[p.posId];
-    var lista=Object.keys(bus).map(function(b){return{b:b,a:sumarSerie(bus[b]).total}})
-      .filter(function(x){return x.a>0}).sort(function(x,y){return y.a-x.a});
-    if(lista.length)h+='<b>Por BU:</b> '+lista.slice(0,4)
-      .map(function(x){return esc(x.b)+' '+fc(x.a)}).join(' · ')+'<br>';
-    h+='<button class="btn-portafolio" onclick="verPortPdv(pdvIdx['+i+'])">'+
-      'Ver portafolio (producto a producto)</button>'
-  }else h+='<div class="popup-sellout"><span class="mini">Sin Sell Out en el período</span></div>';
+          var valor = document.createElement('div');
+          valor.className = 'valor'; valor.innerText = fmtCompacto(x.v.total);
 
-  h+=(p.posId?'<b>POS ID:</b> '+esc(p.posId)+'<br>':'')+
-    '<b>Dirección:</b> '+esc(p.direccion)+'<br>'+
-    '<b>Grupo:</b> '+esc(p.grupo)+'<br>'+
-    '<b>Canal:</b> '+esc(p.channel)+'<br>'+
-    '<b>Región:</b> '+esc(p.region)+' · <b>Población:</b> '+esc(p.poblacion)+'<br>'+
-    (p._brick?'<b>Brick:</b> '+esc(p._brick)+'<br>':'')+
-    '<a class="enlace" href="https://www.google.com/maps?q='+p.lat+','+p.lng+
-    '" target="_blank" rel="noopener">Abrir en Google Maps</a></div>';
-  return h}
-</script>
-</body>
+          var pista = document.createElement('div');
+          pista.className = 'barra-pista';
+          var relleno = document.createElement('div');
+          relleno.className = 'barra-relleno';
+          relleno.style.width = Math.max(2, Math.round(100 * x.v.total / max)) + '%';
+          pista.appendChild(relleno);
+
+          fila.appendChild(cat); fila.appendChild(valor); fila.appendChild(pista);
+          cont.appendChild(fila);
+        });
+      }
+
+      /* ================= Capa de bricks ================= */
+      function dibujarBricks() {
+        bricksLayer.clearLayers();
+        capaPorBrick = {};
+        boundsBricks = L.latLngBounds([]);
+        var dibujados = 0;
+
+        bricksGlobales.forEach(function(brick) {
+          if (!brick.geometry) return;
+          try {
+            var capa = L.geoJSON(brick.geometry, {
+              renderer: lienzo,
+              style: { color: SEM.sin, weight: 2, opacity: 0.9, fillColor: SEM.sin, fillOpacity: 0.18 }
+            });
+            capa.bindPopup(function() { return popupBrick(brick); }, { maxWidth: 320 });
+            capa.addTo(bricksLayer);
+            capaPorBrick[brick.brickId] = capa;
+            boundsBricks.extend(capa.getBounds());
+            dibujados++;
+          } catch (e) {
+            console.warn('Geometría inválida en ' + brick.brickId, e);
+          }
+        });
+
+        if (dibujados === 0 && bricksGlobales.length > 0) {
+          avisar('Ningún polígono pudo dibujarse en el mapa pese a que hay bricks cargados. ' +
+                 'Revisa el orden de coordenadas: GeoJSON usa [longitud, latitud].', true);
+        }
+        bricksLayer.bringToBack();
+      }
+
+      function recolorearBricks() {
+        var totales = Object.keys(agregadoBricks).map(function(id) { return agregadoBricks[id].total; });
+        var escala = crearEscala(totales);
+        var porCiudad = {};
+
+        bricksGlobales.forEach(function(brick) {
+          var capa = capaPorBrick[brick.brickId];
+          if (!capa) return;
+
+          var color, opacidad;
+          if (modoColor === 'ciudad') {
+            color = colorCiudad(brick.ciudad);
+            opacidad = 0.20;
+            porCiudad[(brick.ciudad || 'SIN CIUDAD').toUpperCase()] = color;
+          } else {
+            var agg = agregadoBricks[brick.brickId];
+            var total = agg ? agg.total : 0;
+            color = escala(total);
+            opacidad = total > 0 ? 0.35 : 0.15;
+          }
+          capa.setStyle({ color: color, fillColor: color, fillOpacity: opacidad, weight: 2, opacity: 0.9 });
+        });
+
+        renderLeyenda(porCiudad);
+      }
+
+      function renderLeyenda(porCiudad) {
+        var cont = document.getElementById('leyendaBricks');
+        cont.innerHTML = '';
+        var filas;
+        if (modoColor === 'ciudad') {
+          filas = Object.keys(porCiudad).sort().map(function(c) { return [porCiudad[c], c]; });
+          if (filas.length === 0) filas = [[COLOR_CIUDAD_DEFAULT, 'Sin ciudad']];
+        } else {
+          filas = [
+            [SEM.alto, 'Alto (cuartil superior)'],
+            [SEM.medio, 'Medio'],
+            [SEM.bajo, 'Bajo'],
+            [SEM.muybajo, 'Muy bajo (cuartil inferior)'],
+            [SEM.sin, 'Sin ventas en el período']
+          ];
+        }
+        filas.forEach(function(f) {
+          var fila = document.createElement('div');
+          fila.className = 'fila';
+          var sw = document.createElement('span');
+          sw.className = 'swatch';
+          sw.style.background = f[0];
+          fila.appendChild(sw);
+          fila.appendChild(document.createTextNode(f[1]));
+          cont.appendChild(fila);
+        });
+      }
+
+      function popupBrick(brick) {
+        var agg = agregadoBricks[brick.brickId];
+        var html = '<div class="popup-brick">' +
+          '<h3>' + esc(brick.nombreBrick || brick.nombre || brick.brickId) + '</h3>' +
+          '<b>Brick ID:</b> ' + esc(brick.brickId) + '<br>' +
+          '<b>Ciudad:</b> ' + esc(brick.ciudad || '–') + ' · <b>Zona:</b> ' + esc(brick.zona || '–') + '<br>';
+
+        if (!agg || agg.pdvs.length === 0) {
+          html += '<div class="popup-sellout">Sin PDV visibles en este brick con los filtros actuales.</div>';
+        } else {
+          html += '<div class="popup-sellout">' +
+            '<span class="grande">' + fmtDinero(agg.total) + '</span><br>' +
+            '<span class="mini">Sell Out del período · ' + FMT.format(agg.pdvs.length) + ' PDV</span>' +
+          '</div><b>Top PDV por Sell Out:</b><ol>';
+          agg.pdvs.slice(0, 5).forEach(function(x) {
+            html += '<li>' + esc(x.p.name) +
+              ' <span class="badge-pot">' + esc(x.p.potencial) + '</span><br>' +
+              '<span class="mini">' + fmtDinero(x.venta.total) + ' · ' + FMT.format(x.venta.unidades) + ' und.</span></li>';
+          });
+          html += '</ol>';
+          if (agg.pdvs.length > 5) {
+            html += '<span class="mini">+ ' + FMT.format(agg.pdvs.length - 5) + ' PDV más en el brick</span>';
+          }
+        }
+        return html + '</div>';
+      }
+
+      function alternarBricks() {
+        if (document.getElementById('toggleBricks').checked) {
+          map.addLayer(bricksLayer);
+          bricksLayer.bringToBack();
+        } else {
+          map.removeLayer(bricksLayer);
+        }
+      }
+
+      /* ================= Capa de puntos ================= */
+      function dibujarPuntos(visibles, vv) {
+        puntosLayer.clearLayers();
+        marcadoresPorIdx = {};
+        if (visibles.length === 0) return;
+
+        var escala = crearEscala(vv.map(function(v) { return v.total; }));
+        var maxVenta = vv.reduce(function(m, v) { return Math.max(m, v.total); }, 0);
+        var bounds = L.latLngBounds([]);
+
+        visibles.forEach(function(p, i) {
+          var v = vv[i];
+          var color = escala(v.total);
+          var radio = 5;
+          if (maxVenta > 0 && v.total > 0) radio = 5 + 11 * Math.sqrt(v.total / maxVenta);
+
+          var marker = L.circleMarker([p.lat, p.lng], {
+            renderer: lienzo, radius: radio,
+            color: '#ffffff', weight: 1,
+            fillColor: color, fillOpacity: 0.9
+          });
+          marker.bindPopup(function() { return popupPdv(p); }, { maxWidth: 300 });
+          marker.addTo(puntosLayer);
+          marcadoresPorIdx[i] = marker;
+          bounds.extend([p.lat, p.lng]);
+        });
+
+        if (document.getElementById('toggleAutoZoom').checked && bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+        }
+      }
+
+      function popupPdv(p) {
+        var v = ventaPDV(p);
+        var nMeses = Object.keys(mesesSel).length;
+
+        var html = '<div class="popup-pdv">' +
+          '<h3>' + esc(p.name) + '<span class="badge-pot">' + esc(p.potencial) + '</span></h3>';
+
+        if (p.posId && ventasGlobales[p.posId]) {
+          html += '<div class="popup-sellout">' +
+            '<span class="grande">' + fmtDinero(v.promedio) + '</span> / mes<br>' +
+            '<span class="mini">Promedio sobre ' + nMeses + (nMeses === 1 ? ' mes' : ' meses') + ' seleccionados</span><br>' +
+            '<b>Total período:</b> ' + fmtDinero(v.total) + '<br>' +
+            '<b>Unidades:</b> ' + FMT.format(v.unidades) +
+            (v.mesesConDato < nMeses ? '<br><span class="mini">Ventas en ' + v.mesesConDato + ' de ' + nMeses + ' meses</span>' : '') +
+          '</div>';
+
+          var bus = ventasGlobales[p.posId].bu || {};
+          var listaBu = Object.keys(bus).map(function(b) { return { b: b, a: bus[b] }; })
+                              .sort(function(x, y) { return y.a - x.a; });
+          if (listaBu.length > 0) {
+            html += '<b>BU (histórico):</b> ' + listaBu.slice(0, 3).map(function(x) {
+              return esc(x.b) + ' ' + fmtCompacto(x.a);
+            }).join(' · ') + '<br>';
+          }
+        } else {
+          html += '<div class="popup-sellout"><span class="mini">Sin cruce con Sell Out' +
+                  (p.posId ? ' (POS_ID ' + esc(p.posId) + ' no está en la hoja de ventas)' : ' (sin Nº Oficina Farmacia)') +
+                  '</span></div>';
+        }
+
+        html +=
+          (p.idSap ? '<b>ID SAP:</b> ' + esc(p.idSap) + '<br>' : '') +
+          (p.posId ? '<b>POS ID:</b> ' + esc(p.posId) + '<br>' : '') +
+          '<b>Dirección:</b> ' + esc(p.direccion) + '<br>' +
+          '<b>Grupo:</b> ' + esc(p.grupo) + '<br>' +
+          '<b>Canal:</b> ' + esc(p.channel) + '<br>' +
+          '<b>Región:</b> ' + esc(p.region) + ' · <b>Población:</b> ' + esc(p.poblacion) + '<br>' +
+          (p._brick ? '<b>Brick:</b> ' + esc(p._brick) + '<br>' : '') +
+          '<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank" rel="noopener">Abrir en Google Maps</a>' +
+        '</div>';
+        return html;
+      }
+    </script>
+  </body>
 </html>
