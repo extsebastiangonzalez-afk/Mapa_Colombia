@@ -806,8 +806,17 @@ function mtdLeerProductos_(libro) {
   var col = {
     nombre:   mtdColAlt_(headers, [[['product'], []], [['nombre'], []], [['descripci'], []]]),
     ventaAnt: mtdColAlt_(headers, [[['real', '-1'], ['plan']], [['anterior'], ['plan']]]),
-    ventaMes: mtdCol_(headers, ['real'], ['-1', 'anterior', 'plan', 'ano', 'anio']),
-    unidades: mtdColAlt_(headers, [[['unidad'], []], [['unit'], []]])
+    // 'Real' es el importe original; 'Real (LOCAL)' y 'Real #' también contienen "real",
+    // así que primero se exige coincidencia exacta y solo después se cae al parcial.
+    ventaMes: (function() {
+      for (var i = 0; i < headers.length; i++) {
+        if (headers[i] === 'real') return i;
+      }
+      return mtdCol_(headers, ['real'],
+        ['-1', 'anterior', 'plan', 'ano', 'anio', 'local', '#']);
+    })(),
+    unidades: mtdColAlt_(headers, [[['unidad'], []], [['unit'], []],
+                                    [['real', '#'], ['-1', 'plan', 'ano', 'anio']]])
   };
   Logger.log('Mapeo PLANTILLA → nombre=' + col.nombre + ' ventaMes=' + col.ventaMes +
              ' ventaMesAnterior=' + col.ventaAnt + ' unidades=' + col.unidades +
@@ -833,7 +842,29 @@ function mtdLeerProductos_(libro) {
     });
   }
 
-  return { productos: productos, columnas: col };
+  // La hoja está a nivel cliente x producto (73 clientes x ~102 productos), no es un
+  // catálogo: se consolida por nombre para que la tabla muestre una fila por producto.
+  var agrupado = {};
+  productos.forEach(function(p) {
+    var k = p.nombre || '(sin nombre)';
+    if (!agrupado[k]) {
+      agrupado[k] = { nombre: k, ventaMes: 0, ventaMesAnterior: 0, unidades: 0 };
+    }
+    agrupado[k].ventaMes += p.ventaMes || 0;
+    agrupado[k].ventaMesAnterior += p.ventaMesAnterior || 0;
+    agrupado[k].unidades += p.unidades || 0;
+  });
+  var productosAgrupados = Object.keys(agrupado).map(function(k) {
+    var x = agrupado[k];
+    x.deltaVsPctMesAnterior = x.ventaMesAnterior !== 0
+      ? (x.ventaMes - x.ventaMesAnterior) / x.ventaMesAnterior : null;
+    return x;
+  });
+
+  Logger.log('Productos antes de agrupar: ' + productos.length +
+             ' · después de agrupar: ' + productosAgrupados.length);
+
+  return { productos: productosAgrupados, columnas: col };
 }
 
 /**
