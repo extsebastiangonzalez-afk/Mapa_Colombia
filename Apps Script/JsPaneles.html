@@ -1,0 +1,393 @@
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   PANELES · KPIs, tabla de datos, gráficas de barras, detalle de brick y
+   tabla ampliada. `actualizar()` es el latido de la app: recalcula los
+   agregados sobre el universo filtrado y repinta TODO de una sola pasada.
+   ══════════════════════════════════════════════════════════════════════ */
+
+var vistaActual='tabla',brickPanel=null,tablaDim='seleccion',detActual=null;
+var TOPE_TABLA_RAIL=100, TOPE_TABLA_MODAL=500;
+
+/* ══════════════ Ciclo de actualización ══════════════════════════════ */
+function actualizar(){
+  if(!listo.puntos)return;
+  var vis=visibles(),vv=vis.map(ventaPDV);
+
+  // Agregados por brick (Sell Out, Sell Out conectado y cobertura de agente).
+  agBricks={};agConectado={};agAsignPorBrick={};
+  vis.forEach(function(p,i){if(!p._brick)return;
+    var s=agBricks[p._brick];if(!s)s=agBricks[p._brick]={total:0,pdvs:[]};
+    s.total+=vv[i].total;s.pdvs.push({p:p,v:vv[i]});
+    if(p.idSap)agConectado[p._brick]=(agConectado[p._brick]||0)+vv[i].total;
+    var ap=agAsignPorBrick[p._brick];if(!ap)ap=agAsignPorBrick[p._brick]={asignados:0,total:0};
+    ap.total++;if(tieneAgente(p))ap.asignados++});
+  Object.keys(agBricks).forEach(function(id){
+    agBricks[id].pdvs.sort(function(a,b){return b.v.total-a.v.total})});
+
+  sincronizarSelectores();
+
+  if(skuSel)kpisProducto(vis);else kpisGeneral(vis,vv);
+  recolorBricks();
+  dibujarPuntos(vis,vv);
+  dibujarTop(vis,vv);
+  barras('chartChannel',agVentas(vis,vv,'channel'),'channel',0);
+  barras('chartGrupo',  agVentas(vis,vv,'grupo'),  'grupo',  10);
+  barras('chartRegion', agVentas(vis,vv,'region'), 'region', 10);
+  renderTablaRail(vis,vv);
+  refPanelBrick();
+  if(document.getElementById('modalTabla').style.display==='flex')renderTablaModal()}
+
+function agVentas(ps,vv,d){var a={},n={};
+  ps.forEach(function(p,i){a[p[d]]=(a[p[d]]||0)+vv[i].total;n[p[d]]=(n[p[d]]||0)+1});
+  return Object.keys(a).map(function(k){return{clave:k,n:a[k],pdvs:n[k]}})
+    .sort(function(a,b){return b.n-a.n})}
+
+/* ══════════════ Pestañas del panel derecho ══════════════════════════ */
+function verVista(v){
+  vistaActual=v;
+  ['tabla','analisis','brick'].forEach(function(k){
+    var s=document.getElementById('vista'+k.charAt(0).toUpperCase()+k.slice(1));
+    if(s)s.hidden=(k!==v)});
+  var tabs=document.querySelectorAll('#railTabs .tab');
+  for(var i=0;i<tabs.length;i++)
+    tabs[i].className='tab'+(tabs[i].getAttribute('data-vista')===v?' activa':'');
+  var b=document.getElementById('panelBody');if(b)b.scrollTop=0}
+
+/* ══════════════ KPIs ════════════════════════════════════════════════ */
+function kpi(label,valor,nota,prod){
+  return'<div class="kpi'+(prod?' modo-prod':'')+'">'+
+    '<div class="kpi-label">'+label+'</div>'+
+    '<div class="kpi-valor">'+valor+'</div>'+
+    '<div class="kpi-nota">'+nota+'</div></div>'}
+
+function kpisGeneral(vis,vv){
+  var tot=0,uni=0,con=0;
+  vv.forEach(function(v){tot+=v.total;uni+=v.unidades;if(v.total>0)con++});
+  var nm=Object.keys(idxSel).length;
+  var notaBu=filtros.bu.length?' · '+filtros.bu.join(', '):'';
+  document.getElementById('kpis').innerHTML=
+    kpi('Total Sell Out',fc(tot),nm+(nm===1?' mes':' meses')+notaBu)+
+    kpi('Promedio mensual',nm>0?fc(tot/nm):'–','Sell Out por mes')+
+    kpi('Puntos de venta',FMT.format(vis.length),FMT.format(con)+' con Sell Out')+
+    kpi('Unidades',FMT.format(Math.round(uni)),'del período')}
+
+function kpisProducto(vis){
+  var meta=productosG[skuSel]||{d:skuSel};
+  if(cargandoSku||!distSku){
+    document.getElementById('kpis').innerHTML=
+      kpi('Producto','…','Consultando distribución…',true);return}
+  var tot=0,uni=0,con=0;
+  vis.forEach(function(p){var s=ventaSku(p);
+    if(s.total>0||s.unidades>0){con++;tot+=s.total;uni+=s.unidades}});
+  var nm=Object.keys(idxSel).length;
+  var cob=vis.length?100*con/vis.length:0;
+  var precio=uni>0?tot/uni:0;
+  var rot=(con>0&&nm>0)?uni/con/nm:0;
+  document.getElementById('kpis').innerHTML=
+    kpi('Sell Out producto',fc(tot),esc(meta.d||skuSel),true)+
+    kpi('Cobertura',cob.toFixed(1)+'%',FMT.format(con)+' de '+FMT.format(vis.length)+' PDV',true)+
+    kpi('Rotación',rot.toFixed(1),'unidades / PDV / mes',true)+
+    kpi('Precio promedio',fd(precio),'ponderado por volumen',true)+
+    kpi('Unidades',FMT.format(Math.round(uni)),'del período',true)}
+
+/* ══════════════ Barras (etiqueta directa sobre la barra) ════════════ */
+function pintarBarras(id,datos,ops){
+  ops=ops||{};var c=document.getElementById(id);if(!c)return;c.innerHTML='';
+  var cv=datos.filter(function(d){return d.n>0});
+  if(!cv.length){c.innerHTML='<div class="hint">'+(ops.vacio||'Sin datos')+'</div>';return}
+  var top=ops.topN||0,mos=top>0?cv.slice(0,top):cv,mx=mos[0].n;
+  mos.forEach(function(d){
+    var f=document.createElement('div');
+    f.className='barra-fila'+(d.clase?' '+d.clase:'');
+    if(d.tit)f.title=d.tit;
+    if(d.fn)f.onclick=d.fn;else f.style.cursor='default';
+    var cat=document.createElement('div');cat.className='cat';cat.innerText=d.clave;
+    var val=document.createElement('div');val.className='valor';val.innerText=d.etq||fc(d.n);
+    var pi=document.createElement('div');pi.className='barra-pista';
+    var re=document.createElement('div');re.className='barra-relleno';
+    re.style.width=Math.max(2,Math.round(100*d.n/mx))+'%';
+    pi.appendChild(re);f.appendChild(cat);f.appendChild(val);f.appendChild(pi);c.appendChild(f)});
+  if(top>0&&cv.length>top){
+    var r=cv.slice(top).reduce(function(s,d){return s+d.n},0);
+    var n=document.createElement('div');n.className='hint';
+    n.innerText='+ '+FMT.format(cv.length-top)+' más ('+fc(r)+')';c.appendChild(n)}}
+
+/* Clic en una barra = añadir/quitar ese valor del filtro de la dimensión. */
+function barras(id,datos,dim,top){
+  var sel=fset[dim];
+  pintarBarras(id,datos.map(function(d){return{clave:d.clave,n:d.n,
+    clase:sel?(sel[d.clave]?'activa':'apagada'):'',
+    tit:d.clave+': '+fd(d.n)+' · '+FMT.format(d.pdvs)+' PDV'+
+        (sel&&sel[d.clave]?'\n(clic para quitarlo del filtro)':'\n(clic para añadirlo al filtro)'),
+    fn:function(){alternarFiltro(dim,d.clave)}}}),
+    {topN:top,vacio:'Sin Sell Out en la selección'})}
+
+/* ══════════════ Top PDV ═════════════════════════════════════════════ */
+function dibujarTop(vis,vv){
+  var dat;
+  if(skuSel&&distSku){
+    dat=vis.map(function(p,i){return{p:p,s:ventaSku(p),idx:i}})
+      .filter(function(x){return x.s.total>0})
+      .sort(function(a,b){return b.s.total-a.s.total}).slice(0,10)
+      .map(function(x){return{clave:x.p.name+marcaAgenteTxt(x.p),n:x.s.total,clase:'prod',
+        tit:x.p.name+' · '+fd(x.s.total)+' · '+FMT.format(Math.round(x.s.unidades))+' und.',
+        fn:function(){irAlPdv(x.p,x.idx)}}});
+  }else{
+    dat=vis.map(function(p,i){return{p:p,v:vv[i],idx:i}})
+      .filter(function(x){return x.v.total>0})
+      .sort(function(a,b){return b.v.total-a.v.total}).slice(0,10)
+      .map(function(x){return{clave:x.p.name+marcaAgenteTxt(x.p),n:x.v.total,
+        tit:x.p.name+' · '+fd(x.v.total)+' · Potencial '+x.p.potencial,
+        fn:function(){irAlPdv(x.p,x.idx);verPortPdv(x.p)}}})}
+  pintarBarras('chartTop',dat,{vacio:'Sin Sell Out en la selección'})}
+
+/* ══════════════ Portafolio global ═══════════════════════════════════ */
+function dibujarPort(){
+  if(!listo.ventas||!listo.port)return;
+  var dat=Object.keys(productosG).map(function(sku){
+    var pr=productosG[sku];
+    if(pr.bu&&!buActiva(pr.bu))return null;
+    var s=sumarSerie(pr.s);
+    return{clave:pr.d||sku,n:s.total,
+      tit:(pr.d||sku)+'\nSKU '+sku+(pr.bu?' · '+pr.bu:'')+'\n'+fd(s.total)+
+        ' · '+FMT.format(Math.round(s.unidades))+' und.\nClic para analizar este producto',
+      fn:function(){seleccionarSku(sku)}}
+  }).filter(Boolean).sort(function(a,b){return b.n-a.n});
+  pintarBarras('chartPort',dat,{topN:12,vacio:'Sin datos'})}
+
+/* ══════════════ Brechas del producto ════════════════════════════════ */
+function actProducto(){
+  var bq=document.getElementById('bqBrecha');
+  if(!skuSel||!distSku){bq.hidden=true;return}
+  var meta=productosG[skuSel]||{d:skuSel};
+  var brechas=visibles().map(function(p,i){return{p:p,i:i,v:ventaPDV(p),s:ventaSku(p)}})
+    .filter(function(x){return x.v.total>0&&x.s.total===0})
+    .sort(function(a,b){return b.v.total-a.v.total}).slice(0,10)
+    .map(function(x){return{clave:x.p.name+marcaAgenteTxt(x.p),n:x.v.total,clase:'brecha',
+      tit:x.p.name+'\nSell Out total: '+fd(x.v.total)+
+        '\nPotencial: '+x.p.potencial+'\nNO vende '+(meta.d||skuSel),
+      fn:function(){irAlPdv(x.p,x.i)}}});
+  pintarBarras('chartBrecha',brechas,{vacio:'Todos los PDV de volumen ya venden el producto'});
+  bq.hidden=false}
+
+/* ══════════════ Detalle de portafolio (bajo demanda) ════════════════ */
+function mostrarDetalle(t,h,p){detActual={t:t,h:h,p:p};
+  document.getElementById('bqDetalle').hidden=false;
+  document.getElementById('detTit').innerText=t;
+  document.getElementById('detHint').innerText=h;
+  refDet();verVista('analisis')}
+function refDet(){
+  if(!detActual)return;var ps=detActual.p;
+  if(!ps){document.getElementById('chartDetalle').innerHTML='<div class="hint">Consultando…</div>';return}
+  var dat=Object.keys(ps).map(function(sku){
+    var m=productosG[sku]||{d:sku,bu:''};
+    if(m.bu&&!buActiva(m.bu))return null;
+    var s=sumarSerie(ps[sku]);
+    return{clave:m.d||sku,n:s.total,
+      tit:(m.d||sku)+' · '+fd(s.total)+' · '+FMT.format(Math.round(s.unidades))+' und.'+
+        '\nClic para analizar este producto en el mapa',
+      fn:function(){seleccionarSku(sku)}}
+  }).filter(Boolean).sort(function(a,b){return b.n-a.n});
+  pintarBarras('chartDetalle',dat,{topN:15,vacio:'Sin ventas en el período'})}
+function cerrarDetalle(){detActual=null;document.getElementById('bqDetalle').hidden=true}
+
+function verPortPdv(p){
+  if(!esGas()){mostrarDetalle('Portafolio · '+p.name,'Modo local (sin servidor)',{});return}
+  mostrarDetalle('Portafolio · '+p.name,'Consultando…',null);
+  google.script.run.withSuccessHandler(function(j){var r=JSON.parse(j);
+      mostrarDetalle('Portafolio · '+p.name,'POS_ID '+r.posId,r.productos||{})})
+    .withFailureHandler(function(e){mostrarDetalle('Portafolio · '+p.name,'Error: '+me(e),{})})
+    .getDetallePdvJson(p.posId)}
+
+function verPortBrick(bid){
+  var agg=agBricks[bid];if(!agg||!agg.pdvs.length){avisar('Sin PDV en ese brick.');return}
+  var ids=agg.pdvs.map(function(x){return x.p.posId}).filter(Boolean);
+  if(!ids.length)return;
+  mostrarDetalle('Portafolio · Brick '+bid,'Agregando '+ids.length+' PDV…',null);
+  if(!esGas())return;
+  google.script.run.withSuccessHandler(function(j){var r=JSON.parse(j);
+      mostrarDetalle('Portafolio · Brick '+bid,
+        r.pdvConVentas+' de '+r.pdvConsultados+' PDV con ventas',r.productos||{})})
+    .withFailureHandler(function(e){mostrarDetalle('Portafolio · Brick '+bid,'Error: '+me(e),{})})
+    .getDetalleAgregadoJson(ids.join(','))}
+
+/* ══════════════ Tabla del panel derecho ═════════════════════════════ */
+function renderTablaRail(vis,vv){
+  var modoProd=!!(skuSel&&distSku);
+  var filas=vis.map(function(p,i){
+    return{p:p,i:i,v:vv[i],s:modoProd?ventaSku(p):null}});
+  filas.sort(function(a,b){
+    return (modoProd?b.s.total:b.v.total)-(modoProd?a.s.total:a.v.total)});
+
+  var totJ=0,totU=0;
+  filas.forEach(function(f){totJ+=modoProd?f.s.total:f.v.total;
+    totU+=modoProd?f.s.unidades:f.v.unidades});
+
+  var mapaB={};bricksG.forEach(function(b){mapaB[b.brickId]=b});
+  var cab=modoProd
+    ?'<tr><th>PDV</th><th class="num">Producto $</th><th class="num">Total PDV</th></tr>'
+    :'<tr><th>PDV</th><th class="num">Sell Out $</th><th class="num">Und.</th></tr>';
+  var cuerpo='';
+  filas.slice(0,TOPE_TABLA_RAIL).forEach(function(f){
+    var b=mapaB[f.p._brick];
+    var sub=[(b&&(b.nombreBrick||b.nombre))||f.p.poblacion,f.p.potencial].filter(Boolean).join(' · ');
+    var c2=modoProd?fd(f.s.total):fd(f.v.total);
+    var c3=modoProd?fd(f.v.total):FMT.format(Math.round(f.v.unidades));
+    cuerpo+='<tr onclick="irAlPdv(pdvIdx['+f.i+'],'+f.i+')">'+
+      '<td>'+esc(f.p.name)+marcaAgenteHtml(f.p)+'<span class="sub">'+esc(sub)+'</span></td>'+
+      '<td class="num">'+c2+'</td><td class="num">'+c3+'</td></tr>'});
+  if(!filas.length)cuerpo='<tr><td colspan="3" class="mini">Sin PDV en la selección</td></tr>';
+  else cuerpo+='<tr class="fila-total"><td>TOTAL · '+FMT.format(filas.length)+' PDV</td>'+
+    '<td class="num">'+fd(totJ)+'</td>'+
+    '<td class="num">'+(modoProd?'':FMT.format(Math.round(totU)))+'</td></tr>';
+
+  document.getElementById('tablaRail').innerHTML='<thead>'+cab+'</thead><tbody>'+cuerpo+'</tbody>';
+  document.getElementById('tablaRailTit').innerText=
+    modoProd?'PDV · producto seleccionado':'Puntos de venta';
+  document.getElementById('tablaRailHint').innerText=
+    filas.length>TOPE_TABLA_RAIL
+      ?('Mostrando los '+TOPE_TABLA_RAIL+' mayores de '+FMT.format(filas.length)+
+        ' · "ampliar" para el detalle completo')
+      :'Clic en una fila para ubicarla en el mapa'}
+
+/* ══════════════ Panel de brick ══════════════════════════════════════ */
+function brickUnico(){
+  if((filtros.brick||[]).length!==1)return null;
+  var id=filtros.brick[0];
+  for(var i=0;i<bricksG.length;i++)if(bricksG[i].brickId===id)return bricksG[i];
+  return null}
+
+function refPanelBrick(){
+  var b=brickUnico(),tab=document.querySelector('#railTabs .tab[data-vista="brick"]');
+  if(tab)tab.style.display=b?'':'none';
+  if(!b){brickPanel=null;
+    document.getElementById('brickInfoBody').innerHTML='';
+    if(vistaActual==='brick')verVista('tabla');
+    return}
+  brickPanel=b;
+  document.getElementById('brickInfoTit').innerText=b.nombreBrick||b.nombre||b.brickId;
+  document.getElementById('brickInfoBody').innerHTML=brickInfoHtml(b)}
+
+function brickInfoHtml(b){
+  var agg=agBricks[b.brickId];
+  var h='<div class="popup-brick" style="max-width:none">'+
+    '<b>Brick ID:</b> '+esc(b.brickId)+'<br>'+
+    '<b>Ciudad:</b> '+esc(b.ciudad||'–')+' · <b>Zona:</b> '+esc(b.zona||'–')+'<br>';
+  if(skuSel&&distSku){
+    var meta=productosG[skuSel]||{d:skuSel};
+    var con=[],sin=[];
+    if(agg)agg.pdvs.forEach(function(x){var s=ventaSku(x.p);
+      if(s.total>0)con.push({p:x.p,s:s});else sin.push({p:x.p,v:x.v})});
+    con.sort(function(a,b){return b.s.total-a.s.total});
+    sin.sort(function(a,b){return b.v.total-a.v.total});
+    var tp=agg?agg.pdvs.length:0;
+    var tot=con.reduce(function(s,x){return s+x.s.total},0);
+    var uni=con.reduce(function(s,x){return s+x.s.unidades},0);
+    h+='<div class="popup-sellout prod"><span class="grande">'+fd(tot)+'</span><br>'+
+      '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
+      '<b>Cobertura:</b> '+con.length+' de '+tp+' PDV ('+(tp?Math.round(100*con.length/tp):0)+'%)<br>'+
+      '<b>Unidades:</b> '+FMT.format(Math.round(uni))+'</div>';
+    if(con.length){
+      h+='<b>Sí venden:</b><ol>';
+      con.slice(0,4).forEach(function(x){
+        h+='<li>'+esc(x.p.name)+marcaAgenteHtml(x.p)+'<br><span class="mini">'+fd(x.s.total)+'</span></li>'});
+      h+='</ol>';
+      if(con.length>4)h+='<span class="mini">+ '+FMT.format(con.length-4)+' más</span>'}
+    if(sin.length){
+      h+='<b>NO venden (brecha):</b><ol>';
+      sin.slice(0,4).forEach(function(x){
+        h+='<li>'+esc(x.p.name)+marcaAgenteHtml(x.p)+'<br><span class="mini">Sell Out total: '+
+           fd(x.v.total)+'</span></li>'});
+      h+='</ol>';
+      if(sin.length>4)h+='<span class="mini">+ '+FMT.format(sin.length-4)+' más</span>'}
+  }else if(!agg||!agg.pdvs.length){
+    h+='<div class="popup-sellout">Sin PDV con Sell Out en los filtros actuales.</div>'
+  }else{
+    h+='<div class="popup-sellout"><span class="grande">'+fd(agg.total)+'</span><br>'+
+      '<span class="mini">Sell Out del período · '+FMT.format(agg.pdvs.length)+' PDV</span></div>'+
+      '<b>Top PDV:</b><ol>';
+    agg.pdvs.slice(0,5).forEach(function(x){
+      h+='<li>'+esc(x.p.name)+' <span class="badge-pot">'+esc(x.p.potencial)+'</span>'+
+        marcaAgenteHtml(x.p)+'<br><span class="mini">'+fd(x.v.total)+'</span></li>'});
+    h+='</ol>';
+    if(agg.pdvs.length>5)h+='<span class="mini">+ '+FMT.format(agg.pdvs.length-5)+' más</span>';
+    h+='<button class="btn-portafolio" onclick="verPortBrick(\''+
+      esc(b.brickId).replace(/'/g,"\\'")+'\')">Ver portafolio del brick</button>'}
+  return h+'</div>'}
+
+/* ══════════════ Tabla ampliada (modal) ══════════════════════════════ */
+function abrirTabla(){
+  var b=brickUnico();
+  var sel=document.getElementById('tablaDim');
+  for(var i=0;i<sel.options.length;i++){
+    var o=sel.options[i];
+    if(o.value!=='seleccion')o.disabled=!b}
+  if(!b)tablaDim='seleccion';
+  sel.value=tablaDim;
+  document.getElementById('modalTabla').style.display='flex';
+  renderTablaModal()}
+function cerrarTabla(){document.getElementById('modalTabla').style.display='none'}
+function cambiarDimTabla(v){tablaDim=v;renderTablaModal()}
+
+/* Alcance de la tabla ampliada: la selección tal cual, el brick activo, o
+   todos los bricks de su ciudad (ignorando el filtro de brick).           */
+function filasTablaModal(){
+  var b=brickUnico();
+  if(b&&tablaDim==='ciudad'){
+    var deLaCiudad={};
+    bricksG.forEach(function(x){if((x.ciudad||'')===(b.ciudad||''))deLaCiudad[x.brickId]=1});
+    return puntosG.filter(function(p){return pasa(p,'brick')&&p._brick&&deLaCiudad[p._brick]})}
+  return visibles()}
+
+function renderTablaModal(){
+  var b=brickUnico();
+  var mapaB={};bricksG.forEach(function(x){mapaB[x.brickId]=x});
+  var filas=filasTablaModal().map(function(p){return{p:p,v:ventaPDV(p)}})
+    .sort(function(x,y){return y.v.total-x.v.total});
+
+  var totJ=0,totU=0,totAsig=0;
+  filas.forEach(function(f){totJ+=f.v.total;totU+=f.v.unidades;if(tieneAgente(f.p))totAsig++});
+
+  var muestra=filas.slice(0,TOPE_TABLA_MODAL),ids=[],cuerpo='';
+  muestra.forEach(function(f){
+    var p=f.p;if(p.posId)ids.push(p.posId);
+    var bb=mapaB[p._brick];
+    var terr=esc((bb&&(bb.nombreBrick||bb.nombre))||p._brick||'–');
+    var nSku=(p.posId&&conteoSkuG[p.posId]!=null)?FMT.format(conteoSkuG[p.posId]):'…';
+    var asig=tieneAgente(p)
+      ?asignacionesDe(p).map(function(a){return esc(a.delegado)+tagTipo(a.tipo)}).join('<br>')
+      :'<span class="mini">Sin asignar</span>';
+    cuerpo+='<tr><td>'+terr+'</td><td>'+esc(p.name)+'</td>'+
+      '<td class="num">'+fd(f.v.total)+'</td>'+
+      '<td class="num">'+FMT.format(Math.round(f.v.unidades))+'</td>'+
+      '<td>'+asig+'</td><td class="num">'+nSku+'</td></tr>'});
+  if(!filas.length)cuerpo='<tr><td colspan="6" class="mini">Sin PDV en esta selección</td></tr>';
+  else cuerpo+='<tr class="fila-total"><td colspan="2">TOTAL · '+FMT.format(filas.length)+' PDV</td>'+
+    '<td class="num">'+fd(totJ)+'</td><td class="num">'+FMT.format(Math.round(totU))+'</td>'+
+    '<td>'+FMT.format(totAsig)+' asignados</td><td class="num">—</td></tr>';
+
+  document.getElementById('tablaDetalle').innerHTML=
+    '<thead><tr><th>Brick</th><th>PDV</th><th class="num">Sell Out $</th>'+
+    '<th class="num">Sell Out und.</th><th>Asignado</th>'+
+    '<th class="num" title="SKUs distintos vendidos (histórico)">#SKUs</th></tr></thead>'+
+    '<tbody>'+cuerpo+'</tbody>';
+  document.getElementById('tablaTitulo').innerText='Detalle de PDV'+
+    (b&&tablaDim!=='seleccion'?' · '+(tablaDim==='ciudad'?(b.ciudad||''):(b.nombreBrick||b.brickId)):'');
+  document.getElementById('tablaHint').innerText=FMT.format(filas.length)+' PDV'+
+    (filas.length>TOPE_TABLA_MODAL?(' · mostrando los '+TOPE_TABLA_MODAL+' mayores'):'');
+  cargarConteoSku(ids)}
+
+/* #SKUs por PDV no viene con los demás endpoints: se pide por lotes solo para
+   las filas visibles y se cachea, para no repetir la consulta al reabrir. */
+function cargarConteoSku(ids){
+  var pend=ids.filter(function(id){return id&&conteoSkuG[id]==null});
+  if(!pend.length)return;
+  if(!esGas()){
+    pend.forEach(function(id){conteoSkuG[id]=1+(id.length%6)});renderTablaModal();return}
+  google.script.run.withSuccessHandler(function(j){
+      var r=JSON.parse(j);
+      Object.keys(r.conteo||{}).forEach(function(k){conteoSkuG[k]=r.conteo[k]});
+      renderTablaModal()})
+    .withFailureHandler(function(e){avisar('No pude cargar # SKUs por PDV: '+me(e))})
+    .getConteoSkuJson(pend.join(','))}
+</script>

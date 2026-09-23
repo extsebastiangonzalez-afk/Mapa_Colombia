@@ -1,0 +1,411 @@
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   FILTROS · multi-selección con cruce estilo Power BI.
+
+   Modelo: `filtros[dim]` es un ARREGLO de valores elegidos.
+     · Arreglo vacío  = dimensión sin filtrar.
+     · Dentro de una dimensión los valores se combinan con OR.
+     · Entre dimensiones se cruzan con AND  → eso es `pasa()`.
+   `fset[dim]` es el mismo arreglo como mapa, para que `pasa()` sea O(1)
+   por dimensión y recorrer 3.000+ PDV en cada interacción sea inmediato.
+
+   Cascada: las opciones de cada desplegable se recalculan con TODOS los
+   demás filtros aplicados menos el suyo (`pasa(p, dim)`), así el propio
+   filtro no se excluye a sí mismo y los conteos entre paréntesis reflejan
+   lo que quedaría al elegir esa opción.
+
+   La UI son <select multiple> nativos mejorados con Choices.js. Si el CDN
+   está bloqueado, `CHOICES_OK` queda en false y se usan los <select>
+   nativos: el resto de la lógica no cambia porque siempre se lee/escribe
+   contra el mismo objeto `filtros`.
+   ══════════════════════════════════════════════════════════════════════ */
+
+var DIMS_PDV=['grupo','channel','region','poblacion','potencial'];
+var SELECTORES={},CHOICES_OK=(typeof Choices==='function');
+
+var CFG_SELECTORES=[
+  {dim:'mes',       id:'fMes',       multi:true},
+  {dim:'bu',        id:'fBu',        multi:true},
+  {dim:'sku',       id:'fSku',       multi:false, tope:300,
+                    vacio:'— Sin producto —'},
+  {dim:'grupo',     id:'fGrupo',     multi:true},
+  {dim:'channel',   id:'fChannel',   multi:true},
+  {dim:'region',    id:'fRegion',    multi:true},
+  {dim:'poblacion', id:'fPoblacion', multi:true},
+  {dim:'potencial', id:'fPotencial', multi:true},
+  {dim:'agente',    id:'fAgente',    multi:true},
+  {dim:'brick',     id:'fBrick',     multi:true, tope:400},
+  {dim:'pdv',       id:'fPdv',       multi:true, tope:250}
+];
+
+/* ══════════════ Motor de filtrado ═══════════════════════════════════ */
+function setFiltro(dim,arr){
+  arr=(arr||[]).filter(function(v){return v!==''&&v!=null&&v!=='__mas__'});
+  filtros[dim]=arr;
+  if(!arr.length){fset[dim]=null;return}
+  var m={};arr.forEach(function(v){m[v]=1});fset[dim]=m}
+
+/* `ig` = dimensión a ignorar (para calcular las opciones de ese desplegable). */
+function pasa(p,ig){
+  for(var i=0;i<DIMS_PDV.length;i++){var d=DIMS_PDV[i];
+    if(d===ig)continue;var s=fset[d];if(s&&!s[p[d]])return false}
+  if(ig!=='brick'&&fset.brick&&!fset.brick[p._brick||''])return false;
+  if(ig!=='pdv'&&fset.pdv&&!(fset.pdv[p.posId]||fset.pdv[p.name]))return false;
+  if(ig!=='agente'&&fset.agente){
+    var as=asignacionesDe(p),ok=false;
+    for(var j=0;j<as.length;j++)if(fset.agente[as[j].delegado]){ok=true;break}
+    if(!ok)return false}
+  return true}
+
+function visibles(){return puntosG.filter(function(p){return pasa(p,null)})}
+
+function contarFiltros(){var n=0;
+  Object.keys(filtros).forEach(function(d){n+=(filtros[d]||[]).length});
+  return n+(skuSel?1:0)}
+function actContador(){var e=document.getElementById('contadorFiltros');
+  if(e)e.innerText=FMT.format(contarFiltros())}
+
+function limpiarFiltros(){
+  Object.keys(filtros).forEach(function(d){setFiltro(d,[])});
+  skuSel='';distSku=null;cargandoSku=false;
+  var pr=document.getElementById('fPreset');if(pr)pr.value='TODOS';
+  recalcIdx();aplicarBandaSku();
+  Object.keys(SELECTORES).forEach(function(d){SELECTORES[d].fijar()});
+  actualizar();dibujarPort();refDet();actProducto()}
+
+/* Clic en una barra de una gráfica: añade o quita ese valor (como Power BI). */
+function alternarFiltro(dim,val){
+  var a=(filtros[dim]||[]).slice(),i=a.indexOf(val);
+  if(i>=0)a.splice(i,1);else a.push(val);
+  setFiltro(dim,a);
+  if(SELECTORES[dim])SELECTORES[dim].fijar();
+  actualizar();actProducto()}
+
+/* Clic en un polígono del mapa: aísla ese brick (y al repetir clic, lo suelta). */
+function aplicarFiltroBrick(id){
+  var act=filtros.brick||[];
+  setFiltro('brick',(act.length===1&&act[0]===id)?[]:[id]);
+  if(SELECTORES.brick)SELECTORES.brick.fijar();
+  actualizar();actProducto();
+  if((filtros.brick||[]).length===1)verVista('brick')}
+
+/* ══════════════ Período ═════════════════════════════════════════════ */
+/* filtros.mes vacío = todos los meses (misma convención que el resto).  */
+function recalcIdx(){idxSel={};
+  if(!filtros.mes.length){mesesD.forEach(function(m,i){idxSel[i]=1});return}
+  mesesD.forEach(function(m,i){if(fset.mes&&fset.mes[m])idxSel[i]=1})}
+
+function aplicarPreset(v,silent){
+  var el=document.getElementById('fPreset');if(el)el.value=v;
+  if(v!=='PERS'){
+    var sel=[],n=mesesD.length;
+    if(v==='U3'||v==='U6'){var k=(v==='U3'?3:6);sel=mesesD.slice(Math.max(0,n-k))}
+    else if(v==='ANIO'){var a=String(new Date().getFullYear());
+      sel=mesesD.filter(function(m){return m.indexOf(a)===0});
+      if(sel.length===n)sel=[]}               // si el año actual es todo, no filtra
+    setFiltro('mes',sel);
+    if(SELECTORES.mes)SELECTORES.mes.fijar()}
+  recalcIdx();
+  if(!silent&&listo.puntos){actualizar();dibujarPort();refDet();actProducto()}}
+
+/* ══════════════ Unidad de negocio y producto ════════════════════════ */
+function normBu(b){return String(b||'').trim().toUpperCase()}
+function buActiva(b){
+  if(!filtros.bu.length)return true;
+  var n=normBu(b);
+  for(var i=0;i<filtros.bu.length;i++)if(normBu(filtros.bu[i])===n)return true;
+  return false}
+
+/* Si el SKU elegido deja de existir (o su BU queda fuera del filtro), se suelta. */
+function validarSku(){
+  if(!skuSel)return;
+  var p=productosG[skuSel];
+  if(!p||(p.bu&&!buActiva(p.bu))){skuSel='';distSku=null;
+    if(SELECTORES.sku)SELECTORES.sku.fijar();aplicarBandaSku()}}
+
+function aplicarBandaSku(){
+  var banda=document.getElementById('bandaProd');
+  var meta=productosG[skuSel]||{d:skuSel};
+  if(skuSel){
+    banda.style.display='flex';
+    document.getElementById('bandaTxt').innerText='Analizando: '+(meta.d||skuSel)+' · SKU '+skuSel;
+    document.getElementById('bqPort').hidden=true;
+    document.getElementById('tituloTop').innerText='Top 10 PDV del producto';
+  }else{
+    banda.style.display='none';
+    document.getElementById('bqPort').hidden=false;
+    document.getElementById('bqBrecha').hidden=true;
+    document.getElementById('tituloTop').innerText='Top 10 PDV por Sell Out'}
+  actContador()}
+
+function seleccionarSku(sku){
+  skuSel=sku||'';
+  if(SELECTORES.sku)SELECTORES.sku.fijar();
+  aplicarBandaSku();
+  if(!skuSel){distSku=null;cargandoSku=false;actualizar();actProducto();return}
+  if(!esGas()){distSku=distSkuMock();actualizar();actProducto();return}
+  cargandoSku=true;distSku=null;actualizar();
+  google.script.run.withSuccessHandler(function(j){
+      var r=JSON.parse(j);distSku=r.pdv||{};cargandoSku=false;actualizar();actProducto()})
+    .withFailureHandler(function(e){cargandoSku=false;distSku={};
+      avisar('No pude cargar la distribución del producto: '+me(e)+
+        '\nVerifica que el ETL generó so_sku_indice.json.',true);actualizar()})
+    .getDistribucionSkuJson(skuSel)}
+
+/* Distribución simulada (solo fuera de Apps Script) para revisar el modo producto. */
+function distSkuMock(){var d={},i=0;
+  Object.keys(ventasG).forEach(function(pos){i++;if(i%3===0)return;
+    var bus=ventasG[pos],s=[];
+    Object.keys(bus).forEach(function(b){bus[b].forEach(function(t){
+      s.push([t[0],Math.max(1,Math.round(t[1]*0.25)),Math.round(t[2]*0.25)])})});
+    if(s.length)d[pos]=s});
+  return d}
+
+/* ══════════════ Medidas ═════════════════════════════════════════════ */
+function sumarSerie(s){var u=0,a=0;(s||[]).forEach(function(t){
+  if(idxSel[t[0]]){u+=t[1];a+=t[2]}});return{unidades:u,total:a}}
+function sumarSerieTotal(s){var a=0;(s||[]).forEach(function(t){a+=t[2]});return a}
+
+function ventaPDV(p){
+  var bus=p.posId?ventasG[p.posId]:null;var u=0,a=0,mc={};
+  if(bus)Object.keys(bus).forEach(function(b){
+    if(!buActiva(b))return;
+    bus[b].forEach(function(t){if(idxSel[t[0]]){u+=t[1];a+=t[2];mc[t[0]]=1}})});
+  var n=Object.keys(idxSel).length;
+  return{total:a,unidades:u,mesesConDato:Object.keys(mc).length,promedio:n>0?a/n:0}}
+
+function ventaSku(p){
+  if(!distSku||!p.posId)return{total:0,unidades:0,mesesConDato:0};
+  var s=distSku[p.posId];if(!s)return{total:0,unidades:0,mesesConDato:0};
+  var u=0,a=0,mc=0;
+  s.forEach(function(t){if(idxSel[t[0]]){u+=t[1];a+=t[2];mc++}});
+  return{total:a,unidades:u,mesesConDato:mc}}
+
+/* ══════════════ Asignación de agentes (VM / LAM) ════════════════════ */
+function asignacionesDe(p){return(p.posId&&asignacionesG[p.posId])||[]}
+function tieneAgente(p){return asignacionesDe(p).length>0}
+function marcaAgenteTxt(p){return tieneAgente(p)?' 👤':''}
+function tagTipo(tipo){var t=(tipo||'').toUpperCase();if(!t)return'';
+  return'<span class="tag-tipo'+(t==='LAM'?' lam':'')+'">'+esc(t)+'</span>'}
+function marcaAgenteHtml(p){
+  var as=asignacionesDe(p);if(!as.length)return'';
+  var detalle=as.map(function(a){return a.delegado+(a.tipo?' ('+a.tipo+')':'')}).join(', ');
+  var tags=as.map(function(a){return tagTipo(a.tipo)}).join('');
+  return'<span class="badge-agente" title="'+esc(detalle)+'">👤</span>'+tags}
+
+/* ══════════════ Opciones de cada desplegable (cascada) ══════════════ */
+function opcionesDe(dim){
+  if(dim==='mes')
+    return mesesD.map(function(m){return{valor:m,etiqueta:em(m)}});
+
+  if(dim==='bu')
+    return busD.map(function(b){return{valor:b,etiqueta:b}});
+
+  if(dim==='sku'){
+    var sinPeriodo=Object.keys(idxSel).length===0;
+    return Object.keys(productosG).map(function(k){var p=productosG[k];
+        return{valor:k,etiqueta:(p.d||k)+(p.bu?' · '+p.bu:''),bu:p.bu||'',
+          tot:sinPeriodo?sumarSerieTotal(p.s):sumarSerie(p.s).total}})
+      .filter(function(x){return !x.bu||buActiva(x.bu)})
+      .sort(function(a,b){return b.tot-a.tot})}
+
+  if(dim==='brick'){
+    var cnt={};
+    puntosG.forEach(function(p){if(!p._brick||!pasa(p,'brick'))return;
+      cnt[p._brick]=(cnt[p._brick]||0)+1});
+    return bricksG.filter(function(b){return cnt[b.brickId]}).map(function(b){
+        return{valor:b.brickId,etiqueta:b.nombreBrick||b.nombre||b.brickId,cnt:cnt[b.brickId]}})
+      .sort(function(a,b){return b.cnt-a.cnt})}
+
+  if(dim==='pdv')
+    return puntosG.filter(function(p){return pasa(p,'pdv')})
+      .map(function(p){return{valor:p.posId,etiqueta:p.name+' · '+p.posId}})
+      .sort(function(a,b){return a.etiqueta<b.etiqueta?-1:a.etiqueta>b.etiqueta?1:0});
+
+  if(dim==='agente'){
+    var ca={};
+    puntosG.forEach(function(p){if(!pasa(p,'agente'))return;
+      asignacionesDe(p).forEach(function(a){ca[a.delegado]=(ca[a.delegado]||0)+1})});
+    return Object.keys(ca).sort().map(function(k){return{valor:k,etiqueta:k,cnt:ca[k]}})}
+
+  var c={};
+  puntosG.forEach(function(p){if(pasa(p,dim))c[p[dim]]=(c[p[dim]]||0)+1});
+  return Object.keys(c).filter(Boolean).sort().map(function(k){
+    return{valor:k,etiqueta:k,cnt:c[k]}})}
+
+/* ══════════════ Selector: <select multiple> + Choices.js ════════════ */
+function Selector(cfg){
+  this.dim=cfg.dim;this.multi=!!cfg.multi;this.tope=cfg.tope||0;
+  this.vacio=cfg.vacio||'';this.el=document.getElementById(cfg.id);
+  this.todas=[];this.etiquetas={};this.firma='';this.query='';
+  this.abierto=false;this.silencio=false;this.ch=null;this.temp=null;this.firmaSel=null;
+  if(!this.el)return;
+  var self=this;
+
+  if(CHOICES_OK){
+    this.ch=new Choices(this.el,{
+      removeItemButton:this.multi,
+      searchEnabled:true,
+      searchChoices:false,          // la búsqueda la resuelve pintar(), sin acentos
+      shouldSort:false,
+      allowHTML:false,
+      renderChoiceLimit:-1,
+      placeholder:true,
+      placeholderValue:this.multi?'Todos':'',
+      searchPlaceholderValue:'Buscar…',
+      noResultsText:'Sin resultados',
+      noChoicesText:'Sin opciones',
+      itemSelectText:'',
+      removeItemIconText:'Quitar'
+    });
+    this.cont=this.el.closest('.choices')||this.el.parentNode;
+    // Se escucha 'input' (y no solo el evento 'search' de Choices) para que al
+    // borrar el texto vuelva la lista completa.
+    this.cont.addEventListener('input',function(e){
+      if(!e.target.classList||!e.target.classList.contains('choices__input'))return;
+      self.query=e.target.value||'';
+      clearTimeout(self.temp);self.temp=setTimeout(function(){self.pintar()},110)});
+    this.el.addEventListener('showDropdown',function(){self.abierto=true});
+    // Al cerrar se repinta siempre: mientras el desplegable estuvo abierto,
+    // refrescar() lo dejó en paz (para no interrumpir al usuario) y sus conteos
+    // quedaron congelados en el estado anterior a la selección.
+    this.el.addEventListener('hideDropdown',function(){
+      if(self.silencio)return;            // cierre provocado por el propio repintado
+      self.abierto=false;self.query='';self.fijar()});
+  }
+  this.el.addEventListener('change',function(){if(!self.silencio)self.emitir()});
+}
+
+/* Valores elegidos hoy, como mapa (la fuente de verdad es `filtros`). */
+Selector.prototype.seleccion=function(){
+  var m={},arr=this.dim==='sku'?(skuSel?[skuSel]:[]):(filtros[this.dim]||[]);
+  arr.forEach(function(v){m[v]=1});return m};
+
+Selector.prototype.valores=function(){
+  var v;
+  if(this.ch){v=this.ch.getValue(true);v=(v==null)?[]:(Array.isArray(v)?v:[v])}
+  else v=Array.prototype.slice.call((this.el&&this.el.selectedOptions)||[])
+        .map(function(o){return o.value});
+  return v.filter(function(x){return x!==''&&x!=null&&x!=='__mas__'})};
+
+Selector.prototype.emitir=function(){
+  cambiarSeleccion(this.dim,this.valores());
+  // El chip que acaba de crear Choices trae el conteo pegado; recortarlo aquí
+  // evita esperar al siguiente repintado (que no ocurre si el menú sigue abierto).
+  this.recortarChips()};
+
+/* Recalcula las opciones (cascada) y repinta solo si algo cambió. */
+Selector.prototype.refrescar=function(forzar){
+  if(!this.el)return;
+  if(this.abierto&&!forzar)return;             // no interrumpir un desplegable abierto
+  var ops=opcionesDe(this.dim),self=this,firma=ops.length+'|';
+  for(var i=0;i<ops.length;i++)firma+=ops[i].valor+':'+(ops[i].cnt==null?'':ops[i].cnt)+',';
+  firma+='#'+Object.keys(this.seleccion()).sort().join(',');
+  if(firma===this.firma&&!forzar)return;
+  this.firma=firma;this.todas=ops;
+  ops.forEach(function(o){self.etiquetas[o.valor]=o.etiqueta});
+  this.pintar()};
+
+/* Fuerza el repintado tras un cambio hecho desde fuera (mapa, gráfica, limpiar). */
+Selector.prototype.fijar=function(){this.query='';this.firma='';this.refrescar(true)};
+
+Selector.prototype.pintar=function(){
+  if(!this.el)return;
+  var self=this,sel=this.seleccion(),q=normTxt(this.query);
+  var lista=this.todas;
+  if(q)lista=lista.filter(function(o){
+    return normTxt(o.etiqueta).indexOf(q)!==-1||normTxt(o.valor).indexOf(q)!==-1});
+
+  // Lo seleccionado siempre se muestra, aunque la cascada lo deje en cero:
+  // si no, no habría forma de quitarlo.
+  var elegidas=[],resto=[],puesto={};
+  lista.forEach(function(o){
+    if(sel[o.valor]){elegidas.push(o);puesto[o.valor]=1}else resto.push(o)});
+  Object.keys(sel).forEach(function(v){if(!puesto[v])
+    elegidas.push({valor:v,etiqueta:self.etiquetas[v]||v})});
+
+  var cupo=this.tope?Math.max(0,this.tope-elegidas.length):resto.length;
+  var mostradas=elegidas.concat(resto.slice(0,cupo));
+  var ocultas=Math.max(0,resto.length-cupo);
+
+  var payload=mostradas.map(function(o){
+    return{value:String(o.valor),
+           label:o.etiqueta+(o.cnt!=null?'  ('+FMT.format(o.cnt)+')':''),
+           selected:!!sel[o.valor]}});
+  if(!this.multi)payload.unshift({value:'',label:this.vacio||'Todos',
+    selected:!Object.keys(sel).length,placeholder:true});
+  if(ocultas>0)payload.push({value:'__mas__',disabled:true,
+    label:'+ '+FMT.format(ocultas)+' más — escribe para buscar'});
+
+  if(this.ch){
+    // Escribir en el buscador no debe rehacer los chips: si la selección no
+    // cambió, solo se refresca la lista de opciones (menos parpadeo y no se
+    // pierde el foco del input mientras se escribe).
+    var firmaSel=Object.keys(sel).sort().join('|');
+    var soloBusqueda=(firmaSel===this.firmaSel);
+    this.silencio=true;
+    try{
+      if(soloBusqueda){
+        this.ch.setChoices(payload.filter(function(o){return !o.selected}),'value','label',true);
+      }else{
+        this.ch.removeActiveItems();
+        this.ch.setChoices(payload,'value','label',true);
+        var quiero=Object.keys(sel);
+        if(quiero.length&&this.valores().length!==quiero.length)this.ch.setChoiceByValue(quiero)}
+    }catch(err){}
+    this.silencio=false;this.firmaSel=firmaSel;
+    // El input clonado de Choices conserva el placeholder aunque ya haya chips:
+    // decir "Todos" al lado de tres filtros puestos confunde.
+    var inp=this.cont&&this.cont.querySelector('.choices__input--cloned');
+    if(inp)inp.placeholder=Object.keys(sel).length?'':(this.multi?'Todos':'');
+    this.recortarChips();
+  }else{
+    var h='';
+    payload.forEach(function(o){
+      h+='<option value="'+esc(o.value)+'"'+(o.selected?' selected':'')+
+         (o.disabled?' disabled':'')+'>'+esc(o.label)+'</option>'});
+    this.silencio=true;this.el.innerHTML=h;this.silencio=false}};
+
+/* El conteo "(n)" es útil al elegir, pero en el chip ocupa un ancho que la
+   cabecera no tiene: se recorta del chip (no de la opción), buscando el
+   separador de dos espacios que pone pintar(). Se rehace en cada repintado,
+   así que un chip creado por el usuario queda corto en el siguiente ciclo. */
+Selector.prototype.recortarChips=function(){
+  if(!this.cont)return;
+  var chips=this.cont.querySelectorAll('.choices__list--multiple .choices__item');
+  for(var i=0;i<chips.length;i++){
+    var n=chips[i].firstChild;
+    if(n&&n.nodeType===3)n.nodeValue=n.nodeValue.replace(/\s\s\([\d.,]+\)\s*$/,'')}};
+
+/* ══════════════ Puente selector → estado ════════════════════════════ */
+function cambiarSeleccion(dim,vals){
+  if(dim==='sku'){seleccionarSku(vals[0]||'');return}
+  setFiltro(dim,vals);
+  if(dim==='mes'){recalcIdx();
+    var pr=document.getElementById('fPreset');if(pr)pr.value=vals.length?'PERS':'TODOS';
+    actualizar();dibujarPort();refDet();actProducto();return}
+  if(dim==='bu'){validarSku();actualizar();dibujarPort();refDet();actProducto();return}
+  actualizar();actProducto()}
+
+function iniciarSelectores(){
+  CFG_SELECTORES.forEach(function(cfg){SELECTORES[cfg.dim]=new Selector(cfg)});
+  if(!CHOICES_OK)avisar('Choices.js no cargó desde el CDN: los filtros funcionan como '+
+    'listas múltiples nativas (Ctrl+clic para elegir varios).')}
+
+function sincronizarSelectores(){
+  Object.keys(SELECTORES).forEach(function(d){SELECTORES[d].refrescar(false)});
+  actContador()}
+
+/* ══════════════ Arranque de la interfaz ═════════════════════════════ */
+function iniciarUI(){
+  // Orden importante: Choices.js primero. Mientras los filtros son <select
+  // multiple> nativos la cabecera mide cientos de píxeles y el mapa se queda
+  // con una franja de 5 px; Leaflet cachea ese tamaño al construirse.
+  iniciarSelectores();
+  crearMapa();
+  verVista('tabla');
+  actContador();
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){cerrarDiag();cerrarTabla()}});
+}
+</script>

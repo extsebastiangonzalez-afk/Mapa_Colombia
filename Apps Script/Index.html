@@ -3,395 +3,219 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+
+<!-- Mapa -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<style>
-:root{
-  --page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;
-  --hairline:#e1e0d9;--border:rgba(11,11,11,.10);--accent:#2a78d6;--accent-2:#1c5cab;
-  --desel:#c3c2b7;--error:#d03b3b;--aviso:#b06a00;--producto:#7f77dd;
-  --sem-alto:#1e8e3e;--sem-medio:#f2b600;--sem-bajo:#ef7d00;--sem-muybajo:#d03b3b;--sem-sin:#6f6d67;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;background:var(--page);color:var(--ink);
-  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px}
-.app{display:grid;height:100vh;grid-template-rows:auto auto auto auto 1fr;
-  grid-template-columns:280px 1fr 350px;
-  grid-template-areas:"header header header""tabs tabs tabs""avisos avisos avisos""kpis kpis kpis""side map charts";
-  gap:10px;padding:10px}
-@media(max-width:1100px){.app{height:auto;grid-template-columns:1fr;
-  grid-template-areas:"header""tabs""avisos""kpis""side""map""charts"}.map-card{height:65vh}}
-/* Pestaña activa = Ventas MTD: el tab del mapa se oculta entero y el dashboard
-   ocupa toda la rejilla. #tabMapa usa display:contents para que sus hijos
-   conserven las áreas del grid (side/map/charts) cuando el mapa está visible. */
-body.tab-mtd .app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;
-  grid-template-areas:"header""tabs""mtd"}
-#tabMapa{display:contents}
-body.tab-mtd #tabMapa{display:none}
-#tabVentasMtd{display:none}
-body.tab-mtd #tabVentasMtd{display:block;grid-area:mtd;overflow-y:auto;padding:2px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:8px}
 
-header{grid-area:header;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 14px}
-header h1{margin:0;font-size:18px;font-weight:700}
-header .sub{color:var(--muted);font-size:12.5px}
-header .acc{margin-left:auto;display:flex;gap:8px}
-.btn-mini{padding:5px 10px;border:1px solid var(--hairline);border-radius:6px;
-  background:var(--surface);color:var(--ink-2);font-size:12px;cursor:pointer}
-.btn-mini:hover{background:var(--page);border-color:var(--accent)}
+<!-- Filtros multi-selección. Si el CDN está bloqueado, JsFiltros.html detecta que
+     window.Choices no existe y deja los <select multiple> nativos funcionando. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/styles/choices.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/choices.js@10.2.0/public/assets/scripts/choices.min.js"></script>
 
-.avisos{grid-area:avisos;display:none;flex-direction:column;gap:6px}
-.aviso{padding:8px 12px;border-radius:7px;font-size:12.5px;white-space:pre-wrap;
-  background:#fff8ec;border:1px solid var(--aviso);color:var(--aviso)}
-.aviso.grave{background:#fdf0f0;border-color:var(--error);color:var(--error)}
-
-.kpis{grid-area:kpis;display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:6px}
-.kpi{padding:6px 10px;border-left:3px solid transparent}
-.kpi.modo-prod{border-left-color:var(--producto)}
-.kpi .label{font-size:10.5px;color:var(--ink-2);margin-bottom:1px;
-  text-transform:uppercase;letter-spacing:.02em}
-.kpi .value{font-size:17px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
-.kpi .hint{font-size:10px;color:var(--muted);margin-top:1px}
-
-.side{grid-area:side;padding:14px;overflow-y:auto}
-.side h2,.charts h2{margin:0 0 8px;font-size:13px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2)}
-.side label{display:block;margin:12px 0 4px;font-size:12.5px;color:var(--ink-2)}
-.side select,.side input[type=text]{width:100%;padding:7px 8px;border:1px solid var(--hairline);
-  border-radius:6px;background:var(--surface);color:var(--ink);font-size:13px}
-.btn-limpiar{margin-top:14px;width:100%;padding:8px;border:1px solid var(--hairline);
-  border-radius:6px;background:var(--surface);color:var(--ink-2);font-size:12.5px;cursor:pointer}
-.btn-limpiar:hover{background:var(--page)}
-.seccion{margin-top:18px;padding-top:12px;border-top:1px solid var(--hairline)}
-.seccion.producto{border-top:2px solid var(--producto)}
-.seccion.producto h2{color:var(--producto)}
-
-.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-.chip{padding:4px 8px;border-radius:999px;border:1px solid var(--hairline);
-  background:var(--surface);color:var(--muted);font-size:11.5px;cursor:pointer;
-  user-select:none;font-variant-numeric:tabular-nums}
-.chip.activo{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-.chip:hover{border-color:var(--accent)}
-
-.leyenda .fila{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2);margin-bottom:5px}
-.leyenda .swatch{width:12px;height:12px;border-radius:3px;flex-shrink:0;border:1px solid var(--border)}
-.toggle{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
-
-.map-card{grid-area:map;position:relative;overflow:hidden}
-#map{position:absolute;inset:0}
-.banda-prod{position:absolute;top:10px;left:50px;right:10px;z-index:500;
-  background:var(--producto);color:#fff;padding:6px 12px;border-radius:6px;
-  font-size:12.5px;font-weight:600;display:none;align-items:center;gap:10px;
-  box-shadow:0 2px 8px rgba(0,0,0,.15)}
-.banda-prod .x{margin-left:auto;cursor:pointer;font-weight:700;padding:0 4px}
-
-.charts{grid-area:charts;padding:14px;overflow-y:auto}
-.chart-bloque{margin-bottom:22px}
-.chart-hint{font-size:11.5px;color:var(--muted);margin:-4px 0 10px}
-.chart-bloque h2 .cerrar{float:right;font-size:11px;font-weight:600;color:var(--accent);
-  cursor:pointer;text-transform:none;letter-spacing:0}
-
-.barra-fila{display:grid;grid-template-columns:1fr 66px;align-items:center;
-  gap:8px;padding:3px 4px;border-radius:5px;cursor:pointer}
-.barra-fila:hover{background:var(--page)}
-.barra-fila .cat{font-size:12px;color:var(--ink-2);white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
-.barra-fila .valor{grid-row:span 2;font-size:12px;font-weight:600;color:var(--ink);
-  font-variant-numeric:tabular-nums;text-align:right}
-.barra-pista{height:10px;background:transparent;position:relative}
-.barra-relleno{position:absolute;left:0;top:0;bottom:0;background:var(--accent);
-  border-radius:0 4px 4px 0;min-width:2px;transition:width .25s ease}
-.barra-fila.apagada .barra-relleno{background:var(--desel)}
-.barra-fila.activa .cat{color:var(--ink);font-weight:600}
-.barra-fila.prod .barra-relleno{background:var(--producto)}
-.barra-fila.brecha .barra-relleno{background:var(--sem-muybajo)}
-.barra-fila:hover .barra-relleno{background:var(--accent-2)}
-
-
-.overlay{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;
-  background:rgba(249,249,247,.75);font-weight:600;color:var(--ink-2)}
-.overlay .caja{background:var(--surface);border:1px solid var(--border);padding:14px 28px;
-  border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
-.modal{display:none;position:fixed;inset:0;z-index:4000;background:rgba(11,11,11,.35);
-  align-items:center;justify-content:center;padding:20px}
-.modal .caja{background:var(--surface);border:1px solid var(--border);border-radius:10px;
-  max-width:760px;width:100%;max-height:80vh;overflow:auto;padding:18px 20px}
-.modal h3{margin:0 0 10px;font-size:15px}
-.modal pre{background:var(--page);border:1px solid var(--hairline);border-radius:6px;
-  padding:12px;font-size:11.5px;white-space:pre-wrap;word-break:break-word;margin:0}
-
-.popup-pdv h3,.popup-brick h3{margin:0 0 5px;font-size:14px}
-.popup-pdv,.popup-brick{font-size:13px;max-width:295px}
-.popup-pdv a.enlace{display:inline-block;margin-top:8px;background:var(--accent);color:#fff;
-  padding:5px 10px;border-radius:5px;text-decoration:none;font-size:12.5px}
-.popup-sellout{margin:7px 0;padding:7px 9px;background:var(--page);
-  border:1px solid var(--hairline);border-radius:6px;font-variant-numeric:tabular-nums}
-.popup-sellout.prod{border-color:var(--producto);background:#f4f3fe}
-.popup-sellout .grande{font-size:15px;font-weight:700}
-.badge-pot{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--ink);
-  color:#fff;font-size:11px;font-weight:700;vertical-align:middle;margin-left:4px}
-.badge-agente{display:inline-block;font-size:11px;vertical-align:middle;margin-left:3px;cursor:default}
-.popup-brick ol{margin:5px 0 0;padding-left:18px}
-.popup-brick li{margin-bottom:3px}
-.mini{color:var(--muted);font-size:11.5px}
-.btn-portafolio{display:block;width:100%;margin-top:8px;padding:6px;border:1px solid var(--accent);
-  border-radius:6px;background:var(--surface);color:var(--accent);font-size:12.5px;
-  font-weight:600;cursor:pointer}
-.btn-portafolio:hover{background:var(--accent);color:#fff}
-.smart-dropdown{position:absolute;top:100%;left:0;right:0;z-index:2000;
-  background:var(--surface);border:1px solid var(--hairline);border-radius:6px;
-  max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)}
-.smart-dropdown .opcion{padding:7px 10px;font-size:12.5px;cursor:pointer;color:var(--ink-2);
-  border-bottom:1px solid var(--hairline)}
-.smart-dropdown .opcion:last-child{border-bottom:none}
-.smart-dropdown .opcion:hover{background:var(--page);color:var(--ink)}
-.smart-dropdown .opcion.seleccionado{background:var(--accent);color:#fff}
-.smart-dropdown .empty{padding:7px 10px;font-size:12px;color:var(--muted)}
-
-/* ═══════════ Pestañas + dashboard Ventas MTD ═══════════ */
-.tabs{grid-area:tabs;display:flex;gap:6px;align-items:flex-end}
-.tab{padding:8px 16px;border:1px solid var(--border);border-bottom:none;
-  border-radius:8px 8px 0 0;background:var(--page);color:var(--ink-2);
-  font-size:13px;font-weight:600;cursor:pointer;position:relative;top:1px}
-.tab:hover{color:var(--ink);border-color:var(--accent)}
-.tab.activo{background:var(--surface);color:var(--ink);
-  border-color:var(--border);box-shadow:inset 0 3px 0 var(--accent)}
-
-.mtd-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.mtd-head h2{margin:0;font-size:17px;font-weight:700;letter-spacing:.02em}
-.mtd-head .sub{color:var(--muted);font-size:12.5px}
-.mtd-head .acc{margin-left:auto;display:flex;gap:8px;align-items:center}
-
-.mtd-filtros{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
-  padding:12px 14px;margin-bottom:12px}
-.mtd-filtros .campo{display:flex;flex-direction:column;gap:4px;min-width:170px;flex:1 1 170px}
-.mtd-filtros label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2)}
-.mtd-filtros select,.mtd-filtros input[type=text]{padding:7px 8px;border:1px solid var(--hairline);
-  border-radius:6px;background:var(--surface);color:var(--ink);font-size:13px;width:100%}
-.mtd-filtros .acciones{display:flex;gap:8px}
-.btn-primario{padding:8px 14px;border:1px solid var(--accent);border-radius:6px;
-  background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;cursor:pointer}
-.btn-primario:hover{background:var(--accent-2);border-color:var(--accent-2)}
-
-.mtd-estado{padding:26px 14px;text-align:center;color:var(--ink-2);font-size:13px}
-.mtd-spinner{display:inline-block;width:15px;height:15px;margin-right:8px;vertical-align:-3px;
-  border:2px solid var(--hairline);border-top-color:var(--accent);border-radius:50%;
-  animation:mtd-giro .8s linear infinite}
-@keyframes mtd-giro{to{transform:rotate(360deg)}}
-
-.mtd-kpi{padding:16px 20px;margin-bottom:14px;max-width:760px}
-.mtd-kpi .cifras{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
-.mtd-kpi .bloque{min-width:170px}
-.mtd-kpi .etq{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2)}
-.mtd-kpi .num{font-size:30px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
-.mtd-kpi .num.pct{font-size:34px}
-.mtd-kpi .det{font-size:12px;color:var(--muted);margin-top:3px}
-.mtd-barra{margin-top:12px;height:12px;border-radius:999px;background:var(--page);
-  border:1px solid var(--hairline);overflow:hidden}
-.mtd-barra span{display:block;height:100%;border-radius:999px;transition:width .3s ease}
-
-.mtd-grid{display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:14px}
-@media(max-width:1100px){.mtd-grid{grid-template-columns:1fr}}
-.mtd-panel{padding:12px 14px;min-width:0}
-.mtd-panel h3{margin:0 0 4px;font-size:13px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.04em;color:var(--ink-2)}
-.mtd-panel .hint{font-size:11.5px;color:var(--muted);margin-bottom:8px}
-.mtd-scroll{overflow-x:auto;max-height:430px;overflow-y:auto}
-
-.mtd-tabla{width:100%;border-collapse:collapse;font-size:12.5px;
-  font-variant-numeric:tabular-nums;white-space:nowrap}
-.mtd-tabla th{position:sticky;top:0;z-index:1;background:#2f2e2b;color:#fff;
-  text-align:right;font-weight:600;font-size:11.5px;padding:8px 10px;
-  text-transform:uppercase;letter-spacing:.03em}
-.mtd-tabla th:first-child,.mtd-tabla td:first-child{text-align:left;white-space:normal;min-width:150px}
-.mtd-tabla td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline);color:var(--ink-2)}
-.mtd-tabla tbody tr:nth-child(even){background:rgba(11,11,11,.025)}
-.mtd-tabla tbody tr:hover{background:rgba(42,120,214,.08)}
-.mtd-tabla tbody tr.total{font-weight:700;background:var(--page);color:var(--ink)}
-.mtd-tabla tbody tr.total td{border-top:2px solid var(--hairline);border-bottom:none}
-.mtd-tabla .celda-pct{font-weight:700;border-radius:4px}
-.mtd-tabla .pos{color:#1e7e34;font-weight:600}
-.mtd-tabla .neg{color:#c82333;font-weight:600}
-.mtd-vacio{padding:18px 4px;color:var(--muted);font-size:12.5px;text-align:center}
-</style>
+<?!= include('Estilos'); ?>
 </head>
 <body>
 
+<!-- ═══ Capa de carga y modales ═══════════════════════════════════════ -->
 <div id="overlay" class="overlay"><div class="caja" id="overlayTexto">Cargando datos…</div></div>
 
 <div id="modalDiag" class="modal" onclick="if(event.target===this)cerrarDiag()">
-  <div class="caja"><h3>Diagnóstico de datos</h3>
+  <div class="caja">
+    <h3>Diagnóstico de datos</h3>
     <pre id="diagTexto">Consultando…</pre>
-    <button class="btn-mini" style="margin-top:12px" onclick="cerrarDiag()">Cerrar</button></div>
+    <button class="btn" style="margin-top:12px" onclick="cerrarDiag()">Cerrar</button>
+  </div>
 </div>
 
+<div id="modalTabla" class="modal" onclick="if(event.target===this)cerrarTabla()">
+  <div class="caja caja-tabla">
+    <h3 id="tablaTitulo">Detalle de PDV</h3>
+    <div class="tabla-controles">
+      <label class="mini">Alcance
+        <select id="tablaDim" onchange="cambiarDimTabla(this.value)">
+          <option value="seleccion">Selección actual</option>
+          <option value="brick">Brick</option>
+          <option value="ciudad">Ciudad del brick</option>
+        </select>
+      </label>
+      <span class="mini" id="tablaHint"></span>
+    </div>
+    <div class="tabla-wrap"><table class="tab-datos" id="tablaDetalle"></table></div>
+    <button class="btn" style="margin-top:12px" onclick="cerrarTabla()">Cerrar</button>
+  </div>
+</div>
+
+<!-- ═══ Layout: cabecera · avisos · (mapa | panel derecho) ════════════ -->
 <div class="app">
-  <header class="card">
-    <h1>Cobertura Estratégica · ISDIN Colombia</h1>
-    <span class="sub">PDV · Bricks · Análisis de producto</span>
-    <span class="acc">
-      <button class="btn-mini" onclick="centrarBricks()">Centrar en bricks</button>
-      <button class="btn-mini" onclick="abrirDiag()">Diagnóstico</button>
-    </span>
+
+  <!-- ── Cabecera: marca a la izquierda, filtros al centro, acciones a la derecha ── -->
+  <header class="card topbar">
+    <div class="marca">
+      <div class="logo">ISDIN</div>
+      <div>
+        <h1>Cobertura Estratégica</h1>
+        <span class="sub">Colombia · PDV, Bricks y Sell Out</span>
+      </div>
+    </div>
+
+    <div class="filtros" id="barraFiltros">
+      <label class="filtro"><span>Período</span>
+        <select id="fPreset" onchange="aplicarPreset(this.value)">
+          <option value="TODOS">Todos los meses</option>
+          <option value="U3">Últimos 3 meses</option>
+          <option value="U6">Últimos 6 meses</option>
+          <option value="ANIO">Año actual</option>
+          <option value="PERS">Personalizado</option>
+        </select>
+      </label>
+      <label class="filtro"><span>Meses</span><select id="fMes" multiple></select></label>
+      <label class="filtro"><span>Unidad de negocio</span><select id="fBu" multiple></select></label>
+      <label class="filtro"><span>Producto (SKU)</span><select id="fSku"></select></label>
+      <label class="filtro"><span>Cliente</span><select id="fGrupo" multiple></select></label>
+      <label class="filtro"><span>Canal</span><select id="fChannel" multiple></select></label>
+      <label class="filtro"><span>Departamento</span><select id="fRegion" multiple></select></label>
+      <label class="filtro"><span>Ciudad</span><select id="fPoblacion" multiple></select></label>
+      <label class="filtro"><span>Potencial</span><select id="fPotencial" multiple></select></label>
+      <label class="filtro"><span>Agente</span><select id="fAgente" multiple></select></label>
+      <label class="filtro"><span>Brick</span><select id="fBrick" multiple></select></label>
+      <label class="filtro"><span>Punto de venta</span><select id="fPdv" multiple></select></label>
+    </div>
+
+    <div class="acciones">
+      <button class="btn" onclick="centrarBricks()" title="Encuadrar el mapa en los bricks">Centrar</button>
+      <button class="btn" onclick="abrirDiag()" title="Ver qué devolvieron las hojas y el ETL">Diagnóstico</button>
+      <button class="btn btn-primario" onclick="limpiarFiltros()">Limpiar filtros<span
+        class="contador-filtros" id="contadorFiltros">0</span></button>
+    </div>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <button class="tab activo" id="tabBtnMapa" role="tab" onclick="activarTab('mapa')">🗺️ Mapa</button>
-    <button class="tab" id="tabBtnMtd" role="tab" onclick="activarTab('mtd')">📊 Ventas MTD</button>
+  <!-- ── Vistas de nivel superior: el visor y el informe de Ventas MTD ──
+       .app es un grid de 3 filas (auto auto 1fr): cabecera, esta barra y la vista
+       activa. La vista oculta lleva [hidden] (display:none), así que no genera
+       caja ni consume fila, y la visible siempre recibe el 1fr. ── -->
+  <nav class="mtdtabs-top" role="tablist">
+    <button class="mtdtab-top activo" id="btnVistaMapa" role="tab"
+            onclick="mostrarVistaSuperior('mapa')">🗺️ Mapa</button>
+    <button class="mtdtab-top" id="btnVistaVentasMtd" role="tab"
+            onclick="mostrarVistaSuperior('ventasmtd')">📊 Ventas MTD</button>
   </nav>
 
-  <!-- Pestaña 1: el visor completo. display:contents mantiene las áreas del grid. -->
-  <div id="tabMapa">
+  <div id="vistaMapa">
+    <div class="avisos" id="avisos"></div>
 
-  <div class="avisos" id="avisos"></div>
-  <div class="kpis" id="kpis"></div>
+    <div class="cuerpo">
 
-  <aside class="card side">
-    <h2>Período Sell Out</h2>
-    <select id="preset" onchange="aplicarPreset(this.value)">
-      <option value="TODOS">Todos los meses</option>
-      <option value="U3">Últimos 3 meses</option>
-      <option value="U6">Últimos 6 meses</option>
-      <option value="ANIO">Año actual</option>
-      <option value="PERS">Personalizado</option>
-    </select>
-    <div class="chips" id="chips"></div>
+      <!-- ── Área central: mapa ── -->
+      <main class="card main">
+        <div class="barra-mapa">
+          <label>Colorear bricks por
+            <select id="modoColor" onchange="cambiarModo(this.value)">
+              <option value="rendimiento">Rendimiento (Sell Out)</option>
+              <option value="conectado">Sell Out conectado</option>
+              <option value="asignado">Cobertura de agente</option>
+              <option value="ciudad">Ciudad</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="togBricks" checked onchange="alternarBricks()"> Polígonos</label>
+          <label><input type="checkbox" id="togZoom" checked> Auto-zoom</label>
+          <label><input type="checkbox" id="togSinProd" checked onchange="actualizar()"> PDV sin el producto</label>
+          <div class="leyenda-inline" id="leyBricks"></div>
+        </div>
+        <div class="mapa-wrap">
+          <div id="map"></div>
+          <div class="banda-prod" id="bandaProd">
+            <span id="bandaTxt"></span>
+            <span class="x" onclick="seleccionarSku('')" title="Salir del análisis de producto">✕</span>
+          </div>
+        </div>
+      </main>
 
-    <div class="seccion producto">
-      <h2>Análisis de producto</h2>
-      <label>Unidad de negocio</label>
-      <div style="position:relative">
-        <input type="text" id="buSearch" placeholder="Buscar BU..." autocomplete="off"
-               oninput="filtrarDropdown('bu')" onfocus="abrirDropdown('bu')"/>
-        <div id="buDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Producto (SKU)</label>
-      <div style="position:relative">
-        <input type="text" id="skuSearch" placeholder="Buscar producto..." autocomplete="off"
-               oninput="filtrarDropdown('sku')" onfocus="abrirDropdown('sku')"/>
-        <div id="skuDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <div class="mini" id="skuInfo" style="margin-top:6px"></div>
+      <!-- ── Panel derecho: KPIs arriba, tabla y análisis abajo ── -->
+      <aside class="rail">
+        <div class="kpis" id="kpis"></div>
+
+        <div class="panel">
+          <div class="tabs" id="railTabs">
+            <button class="tab activa" data-vista="tabla" onclick="verVista('tabla')">Tabla</button>
+            <button class="tab" data-vista="analisis" onclick="verVista('analisis')">Análisis</button>
+            <button class="tab" data-vista="brick" onclick="verVista('brick')">Brick</button>
+          </div>
+
+          <div class="panel-body" id="panelBody">
+
+            <!-- Vista: tabla de datos del universo filtrado -->
+            <section id="vistaTabla">
+              <div class="tabla-cab">
+                <h2 style="margin:0;flex:1" id="tablaRailTit">Puntos de venta</h2>
+                <span class="acc mini" style="color:var(--accent);cursor:pointer"
+                      onclick="abrirTabla()">ampliar</span>
+              </div>
+              <div class="hint" id="tablaRailHint"></div>
+              <table class="tab-datos" id="tablaRail"></table>
+            </section>
+
+            <!-- Vista: gráficas -->
+            <section id="vistaAnalisis" hidden>
+              <div class="bloque" id="bqBrecha" hidden>
+                <h2>Brechas de oportunidad</h2>
+                <div class="hint">PDV de alto volumen que NO venden este producto</div>
+                <div id="chartBrecha"></div>
+              </div>
+              <div class="bloque" id="bqDetalle" hidden>
+                <h2><span id="detTit">Portafolio</span><span class="acc" onclick="cerrarDetalle()">cerrar</span></h2>
+                <div class="hint" id="detHint"></div>
+                <div id="chartDetalle"></div>
+              </div>
+              <div class="bloque">
+                <h2 id="tituloTop">Top 10 PDV por Sell Out</h2>
+                <div class="hint">Clic para localizar en el mapa</div>
+                <div id="chartTop"></div>
+              </div>
+              <div class="bloque" id="bqPort">
+                <h2>Portafolio · Top 12 productos</h2>
+                <div class="hint">Clic en un producto para analizarlo</div>
+                <div id="chartPort"></div>
+              </div>
+              <div class="bloque">
+                <h2>Sell Out por canal</h2>
+                <div class="hint">Clic para añadir o quitar del filtro</div>
+                <div id="chartChannel"></div>
+              </div>
+              <div class="bloque">
+                <h2>Top 10 clientes</h2>
+                <div class="hint">Clic para añadir o quitar del filtro</div>
+                <div id="chartGrupo"></div>
+              </div>
+              <div class="bloque">
+                <h2>Sell Out por departamento</h2>
+                <div class="hint">Clic para añadir o quitar del filtro</div>
+                <div id="chartRegion"></div>
+              </div>
+            </section>
+
+            <!-- Vista: detalle del brick seleccionado -->
+            <section id="vistaBrick" hidden>
+              <div class="bloque">
+                <h2><span id="brickInfoTit">Brick</span><span class="acc" onclick="abrirTabla()">ampliar</span></h2>
+                <div id="brickInfoBody"></div>
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </aside>
+
     </div>
+  </div><!-- /#vistaMapa -->
 
-    <div class="seccion">
-      <h2>Filtros de PDV</h2>
-      <label>Grupo de compras</label>
-      <div style="position:relative">
-        <input type="text" id="grupoSearch" placeholder="Buscar grupo..." autocomplete="off"
-               oninput="filtrarDropdown('grupo')" onfocus="abrirDropdown('grupo')"/>
-        <div id="grupoDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Canal</label>
-      <div style="position:relative">
-        <input type="text" id="channelSearch" placeholder="Buscar canal..." autocomplete="off"
-               oninput="filtrarDropdown('channel')" onfocus="abrirDropdown('channel')"/>
-        <div id="channelDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Región</label>
-      <div style="position:relative">
-        <input type="text" id="regionSearch" placeholder="Buscar región..." autocomplete="off"
-               oninput="filtrarDropdown('region')" onfocus="abrirDropdown('region')"/>
-        <div id="regionDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Población</label>
-      <div style="position:relative">
-        <input type="text" id="poblacionSearch" placeholder="Buscar población..." autocomplete="off"
-               oninput="filtrarDropdown('poblacion')" onfocus="abrirDropdown('poblacion')"/>
-        <div id="poblacionDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Potencial Cliente</label>
-      <div style="position:relative">
-        <input type="text" id="potencialSearch" placeholder="Buscar potencial..." autocomplete="off"
-               oninput="filtrarDropdown('potencial')" onfocus="abrirDropdown('potencial')"/>
-        <div id="potencialDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Agente / Delegado</label>
-      <div style="position:relative">
-        <input type="text" id="agenteSearch" placeholder="Buscar VM o LAM..." autocomplete="off"
-               oninput="filtrarDropdown('agente')" onfocus="abrirDropdown('agente')"/>
-        <div id="agenteDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <label>Brick</label>
-      <div style="position:relative">
-        <input type="text" id="brickSearch" placeholder="Buscar brick..." autocomplete="off"
-               oninput="filtrarDropdown('brick')" onfocus="abrirDropdown('brick')"/>
-        <div id="brickDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <div class="mini" id="brickSelInfo" style="margin-top:3px"></div>
-      <label>Punto de Venta (PDV)</label>
-      <div style="position:relative">
-        <input type="text" id="pdvSearch" placeholder="Buscar PDV..." autocomplete="off"
-               oninput="filtrarDropdown('pdv')" onfocus="abrirDropdown('pdv')"/>
-        <div id="pdvDropdown" class="smart-dropdown" style="display:none"></div>
-      </div>
-      <div class="mini" id="pdvSelInfo" style="margin-top:3px"></div>
-      <button class="btn-limpiar" onclick="limpiarFiltros()">Limpiar filtros</button>
-    </div>
-
-    <div class="seccion leyenda">
-      <h2>Capa de bricks</h2>
-      <label>Colorear por</label>
-      <select id="modoColor" onchange="cambiarModo(this.value)">
-        <option value="rendimiento">Rendimiento (Sell Out)</option>
-        <option value="ciudad">Ciudad</option>
-      </select>
-      <div id="leyBricks" style="margin-top:10px"></div>
-      <label class="toggle"><input type="checkbox" id="togBricks" checked onchange="alternarBricks()"> Mostrar polígonos</label>
-      <label class="toggle"><input type="checkbox" id="togZoom"> Auto-zoom al filtrar</label>
-      <label class="toggle"><input type="checkbox" id="togSinProd" checked onchange="actualizar()"> Ver PDV sin el producto</label>
-    </div>
-  </aside>
-
-  <main class="card map-card">
-    <div id="map"></div>
-    <div class="banda-prod" id="bandaProd">
-      <span id="bandaTxt"></span>
-      <span class="x" onclick="seleccionarSku('')">✕</span>
-    </div>
-  </main>
-
-  <aside class="card charts">
-    <div class="chart-bloque" id="bqBrecha" style="display:none">
-      <h2>Brechas de oportunidad</h2>
-      <div class="chart-hint">PDV de alto volumen que NO venden este producto</div>
-      <div id="chartBrecha"></div>
-    </div>
-
-    <div class="chart-bloque" id="bqDetalle" style="display:none">
-      <h2><span id="detTit">Portafolio</span><span class="cerrar" onclick="cerrarDetalle()">cerrar</span></h2>
-      <div class="chart-hint" id="detHint"></div>
-      <div id="chartDetalle"></div>
-    </div>
-
-    <div class="chart-bloque">
-      <h2 id="tituloTop">Top 10 PDV por Sell Out</h2>
-      <div class="chart-hint">Clic para localizar en el mapa</div>
-      <div id="chartTop"></div>
-    </div>
-    <div class="chart-bloque" id="bqPort">
-      <h2>Portafolio · Top 12 productos</h2>
-      <div class="chart-hint">Clic en un producto para analizarlo</div>
-      <div id="chartPort"></div>
-    </div>
-    <div class="chart-bloque"><h2>Sell Out por canal</h2>
-      <div class="chart-hint">Clic para filtrar</div><div id="chartCanal"></div></div>
-    <div class="chart-bloque"><h2>Top 10 grupos</h2>
-      <div class="chart-hint">Clic para filtrar</div><div id="chartGrupo"></div></div>
-    <div class="chart-bloque"><h2>Sell Out por región</h2>
-      <div class="chart-hint">Clic para filtrar</div><div id="chartRegion"></div></div>
-  </aside>
-
-  </div><!-- /#tabMapa -->
-
-  <!-- Pestaña 2: informe de Ventas MTD (hojas CUMPLIMIENTO y PLANTILLA) -->
-  <div id="tabVentasMtd">
+  <div id="vistaVentasMtd" hidden>
     <div class="mtd-head">
       <h2>INFORME DE VENTAS MTD</h2>
       <span class="sub" id="mtdSubtitulo"></span>
       <span class="acc">
         <span class="sub" id="mtdActualizado"></span>
-        <button class="btn-mini" onclick="cargarVentasMtd(true)">Actualizar</button>
+        <button class="btn" onclick="cargarVentasMtd(true)">Actualizar</button>
       </span>
     </div>
 
@@ -410,8 +234,8 @@ header .acc{margin-left:auto;display:flex;gap:8px}
                onkeydown="if(event.key==='Enter')renderVentasMtd()">
       </div>
       <div class="acciones">
-        <button class="btn-primario" onclick="renderVentasMtd()">Aplicar Filtros</button>
-        <button class="btn-mini" onclick="mtdLimpiarFiltros()">Limpiar</button>
+        <button class="mtd-btn" onclick="renderVentasMtd()">Aplicar Filtros</button>
+        <button class="btn" onclick="mtdLimpiarFiltros()">Limpiar</button>
       </div>
     </div>
 
@@ -461,989 +285,12 @@ header .acc{margin-left:auto;display:flex;gap:8px}
   </div>
 </div>
 
-<script>
-/* ═══════════ Configuración ═══════════ */
-var SEM={alto:'#1e8e3e',medio:'#f2b600',bajo:'#ef7d00',muybajo:'#d03b3b',sin:'#6f6d67'};
-var CIUDADES={'BOGOTA':'#2a78d6','BOGOTÁ':'#2a78d6','MEDELLIN':'#008300','MEDELLÍN':'#008300',
-  'CALI':'#e87ba4','CARTAGENA':'#eda100','BARRANQUILLA':'#8b5cf6'};
-var FMT=new Intl.NumberFormat('es-CO');
-var MESN=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-
-function fc(v){var a=Math.abs(v);
-  if(a>=1e9)return'$ '+(v/1e9).toFixed(1)+' MM';
-  if(a>=1e6)return'$ '+(v/1e6).toFixed(1)+' M';
-  if(a>=1e3)return'$ '+(v/1e3).toFixed(0)+' K';
-  return'$ '+FMT.format(Math.round(v))}
-function fd(v){return'$ '+FMT.format(Math.round(v))}
-function em(m){var p=m.split('-');return MESN[Number(p[1])-1]+' '+p[0].slice(2)}
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-  .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-
-/* ═══════════ Estado ═══════════ */
-var puntosG=[],bricksG=[],ventasG={},productosG={},asignacionesG={};
-var mesesD=[],mesesSel={},idxSel={};
-var busD=[],buSel='TODAS';
-var skuSel='',distSku=null,cargandoSku=false;
-var filtros={grupo:'TODOS',channel:'TODOS',region:'TODOS',poblacion:'TODOS',potencial:'TODOS',
-  brick:'TODOS',pdv:'TODOS',agente:'TODOS'};
-var listo={puntos:false,bricks:false,ventas:false,port:false,asignaciones:false};
-var modoColor='rendimiento',asignado=false;
-var capaBrick={},agBricks={},marcIdx={},pdvIdx={},bbBricks=null;
-
-var map=L.map('map',{preferCanvas:true}).setView([4.5709,-74.2973],6);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-var lienzo=L.canvas({padding:.4});
-var bLayer=L.featureGroup().addTo(map);
-var pLayer=L.layerGroup().addTo(map);
-
-function avisar(m,g){var c=document.getElementById('avisos');c.style.display='flex';
-  var d=document.createElement('div');d.className='aviso'+(g?' grave':'');d.innerText=m;c.appendChild(d)}
-function esGas(){return typeof google!=='undefined'&&google.script&&google.script.run}
-function me(e){return e&&e.message?e.message:String(e)}
-
-/* ═══════════ Carga ═══════════ */
-if(esGas()){
-  google.script.run.withSuccessHandler(function(j){recPuntos(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('PDV: '+me(e),true);listo.puntos=true;boot()}).getPuntosJson();
-  google.script.run.withSuccessHandler(function(j){recBricks(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Bricks: '+me(e),true);listo.bricks=true;boot()}).getBricksJson();
-  google.script.run.withSuccessHandler(function(j){recVentas(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Sell Out: '+me(e),true);listo.ventas=true;boot()}).getVentasJson();
-  google.script.run.withSuccessHandler(function(j){recPort(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Portafolio: '+me(e));listo.port=true;boot()}).getPortafolioJson();
-  google.script.run.withSuccessHandler(function(j){recAsignaciones(JSON.parse(j))})
-    .withFailureHandler(function(e){avisar('Asignación: '+me(e));listo.asignaciones=true;boot()}).getAsignacionesJson();
-}else{
-  setTimeout(function(){
-    recPuntos({puntos:[
-      {id:'1',posId:'11026727_ZO',name:'Bella Piel Armenia',grupo:'BELLA PIEL',channel:'Ph Independents',
-       region:'EJE CAFETERO',poblacion:'Armenia',potencial:'A',direccion:'Cc Único',brickCrm:'',lat:4.5339,lng:-75.6811},
-      {id:'2',posId:'11026727_ZC',name:'Bella Piel Country',grupo:'BELLA PIEL',channel:'Corporations',
-       region:'BOGOTÁ',poblacion:'Bogota',potencial:'AA',direccion:'Cl 85',brickCrm:'',lat:4.6700,lng:-74.0550}],
-      stats:{filas:2,conCoordenada:2,sinCoordenada:0,conPosId:2}});
-    recBricks({bricks:[{brickId:'BOG-001',nombre:'CHICO',zona:'CHAPINERO',ciudad:'BOGOTA',
-      departamento:'BOGOTA D.C.',nombreBrick:'CHAPINERO, CHICO',
-      geometry:{type:'Polygon',coordinates:[[[-74.07,4.65],[-74.04,4.65],[-74.04,4.69],[-74.07,4.69],[-74.07,4.65]]]}}],
-      stats:{filas:1,conGeometria:1,sinGeometria:0}});
-    recVentas({meses:['2026-01','2026-02','2026-03'],pdv:{
-      '11026727_ZO':{bu:{'FOTO':[[0,14,1327060],[1,12,1100000],[2,18,1600000]]}},
-      '11026727_ZC':{bu:{'FOTO':[[0,40,3800000],[1,45,4200000]],'DERMA':[[2,20,1900000]]}}}});
-    recPort({meses:['2026-01','2026-02','2026-03'],productos:{
-      '8429420251984':{d:'FP GEL CREAM SPF50 250ML',bu:'FOTO',f:'',s:[[0,54,5127060],[1,57,5300000],[2,18,1600000]]},
-      '8470001716125':{d:'FP COMPACT ARENA SPF50+ 10G',bu:'FOTO',f:'',s:[[0,6,428670]]}}});
-    recAsignaciones({pdv:{
-      '11026727_ZO':[{delegado:'Ana Pérez',team:'Eje Cafetero',tipo:'VM',cuentaId:'',cuentaNombre:''}],
-      '11026727_ZC':[{delegado:'Luis Gómez',team:'Bogotá Norte',tipo:'LAM',cuentaId:'',cuentaNombre:''}]}});
-  },300);
-}
-
-function recPuntos(p){
-  puntosG=(p.puntos||[]).filter(function(x){return x.posId&&x.posId!=='0'});
-  listo.puntos=true;boot()}
-function recBricks(p){bricksG=p.bricks||[];listo.bricks=true;boot()}
-function recVentas(p){
-  mesesD=p.meses||[];var pdv=p.pdv||{};ventasG={};var bs={};
-  Object.keys(pdv).forEach(function(pos){var bus=pdv[pos].bu||{};ventasG[pos]=bus;
-    Object.keys(bus).forEach(function(b){bs[b]=1})});
-  busD=Object.keys(bs).sort();
-  // idxSel debe existir antes de marcar ventas como listas y antes de boot().
-  aplicarPreset('TODOS',true);
-  // Si el portafolio llegó primero, se reordena el selector con los meses ya definidos.
-  if(listo.port)llenarSku();
-  listo.ventas=true;boot()}
-// so_portafolio.json del ETL: {meses, sku:{SKU:{desc,familia,bu,serie}}}.
-// Se normaliza al formato interno {d,bu,f,s}; también acepta el formato {productos:{d,bu,f,s}}.
-function recPort(p){
-  var src=p.productos||p.sku||{};productosG={};
-  Object.keys(src).forEach(function(k){var x=src[k]||{};
-    productosG[k]={d:x.d||x.desc||k,bu:String(x.bu||'').trim().toUpperCase(),
-      f:x.f||x.familia||'',s:x.s||x.serie||[]}});
-  llenarSku();listo.port=true;boot()}
-function recAsignaciones(p){asignacionesG=p.pdv||{};listo.asignaciones=true;boot()}
-
-function boot(){
-  actOverlay();
-  if(listo.bricks&&listo.puntos&&!asignado){
-    asignarBricks();dibujarBricks();asignado=true;
-    if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
-  if(listo.puntos)actualizar();
-  // El portafolio depende de idxSel (definido en recVentas): esperar ambos.
-  if(listo.port&&listo.ventas)dibujarPort()}
-
-function actOverlay(){
-  var o=document.getElementById('overlay');
-  if(listo.puntos&&listo.bricks&&listo.ventas&&listo.port&&listo.asignaciones){o.style.display='none';return}
-  var f=[];if(!listo.puntos)f.push('PDV');if(!listo.bricks)f.push('bricks');
-  if(!listo.ventas)f.push('Sell Out');if(!listo.port)f.push('portafolio');
-  if(!listo.asignaciones)f.push('asignación');
-  document.getElementById('overlayTexto').innerText='Cargando '+f.join(', ')+'…'}
-
-function abrirDiag(){document.getElementById('modalDiag').style.display='flex';
-  var p=document.getElementById('diagTexto');
-  if(!esGas()){p.innerText='Solo en Apps Script.';return}
-  p.innerText='Consultando…';
-  google.script.run.withSuccessHandler(function(j){p.innerText=JSON.stringify(JSON.parse(j),null,2)})
-    .withFailureHandler(function(e){p.innerText='Error: '+me(e)}).getDiagnosticoJson()}
-function cerrarDiag(){document.getElementById('modalDiag').style.display='none'}
-function centrarBricks(){if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
-
-/* ═══════════ Período ═══════════ */
-function recalcIdx(){idxSel={};mesesD.forEach(function(m,i){if(mesesSel[m])idxSel[i]=1})}
-function aplicarPreset(v,silent){
-  document.getElementById('preset').value=v;
-  if(v!=='PERS'){mesesSel={};var n=mesesD.length;
-    if(v==='TODOS')mesesD.forEach(function(m){mesesSel[m]=1});
-    else if(v==='U3'||v==='U6'){var k=v==='U3'?3:6;
-      mesesD.slice(Math.max(0,n-k)).forEach(function(m){mesesSel[m]=1})}
-    else if(v==='ANIO'){var a=String(new Date().getFullYear());
-      mesesD.forEach(function(m){if(m.indexOf(a)===0)mesesSel[m]=1})}}
-  recalcIdx();renderChips();
-  if(!silent&&listo.puntos){actualizar();dibujarPort();refDet();actProducto()}}
-function alternarMes(m){if(mesesSel[m])delete mesesSel[m];else mesesSel[m]=1;
-  document.getElementById('preset').value='PERS';recalcIdx();renderChips();
-  actualizar();dibujarPort();refDet();actProducto()}
-function renderChips(){
-  var c=document.getElementById('chips');c.innerHTML='';
-  if(!mesesD.length){c.innerHTML='<span class="mini">Sin meses</span>';return}
-  mesesD.forEach(function(m){var s=document.createElement('span');
-    s.className='chip'+(mesesSel[m]?' activo':'');s.innerText=em(m);s.title=m;
-    s.onclick=function(){alternarMes(m)};c.appendChild(s)})}
-
-function cambiarBu(v){buSel=v;llenarSku();actualizar();dibujarPort();refDet();actProducto()}
-
-/* ═══════════ Selector de producto ═══════════ */
-function normBu(b){return String(b||'').trim().toUpperCase()}
-// Suma todos los meses de la serie sin filtrar por idxSel (orden de respaldo).
-function sumarSerieTotal(s){var a=0;(s||[]).forEach(function(t){a+=t[2]});return a}
-
-// Si el SKU seleccionado deja de existir (o de pertenecer a la BU activa) tras
-// recargar ventas/portafolio o cambiar de BU, vuelve a la vista general.
-function llenarSku(){
-  var prev=skuSel,bs=normBu(buSel),sigue=!prev;
-  if(prev){var p=productosG[prev];sigue=!!p&&(bs==='TODAS'||!p.bu||normBu(p.bu)===bs)}
-  if(!sigue){
-    skuSel='';
-    var input=document.getElementById('skuSearch');
-    if(input&&document.activeElement!==input)input.value=''}}
-
-function seleccionarSku(sku){
-  skuSel=sku;
-  var skuInput=document.getElementById('skuSearch');
-  if(skuInput)skuInput.value=sku?((productosG[sku]||{}).d||sku):'';
-  var banda=document.getElementById('bandaProd');
-  if(!sku){distSku=null;banda.style.display='none';
-    document.getElementById('skuInfo').innerText='';
-    document.getElementById('bqBrecha').style.display='none';
-    document.getElementById('bqPort').style.display='block';
-    document.getElementById('tituloTop').innerText='Top 10 PDV por Sell Out';
-    actualizar();return}
-  var meta=productosG[sku]||{d:sku};
-  banda.style.display='flex';
-  document.getElementById('bandaTxt').innerText='Analizando: '+(meta.d||sku);
-  document.getElementById('skuInfo').innerText='SKU '+sku;
-  document.getElementById('bqPort').style.display='none';
-  document.getElementById('tituloTop').innerText='Top 10 PDV del producto';
-  if(!esGas()){distSku={};actualizar();return}
-  cargandoSku=true;distSku=null;actualizar();
-  google.script.run.withSuccessHandler(function(j){
-      var r=JSON.parse(j);distSku=r.pdv||{};cargandoSku=false;actualizar();actProducto()})
-    .withFailureHandler(function(e){cargandoSku=false;distSku={};
-      avisar('No pude cargar la distribución del producto: '+me(e)+
-        '\nVerifica que el ETL generó so_sku_indice.json.',true);actualizar()})
-    .getDistribucionSkuJson(sku)}
-
-/* ═══════════ Medidas ═══════════ */
-function sumarSerie(s){var u=0,a=0;(s||[]).forEach(function(t){
-  if(idxSel[t[0]]){u+=t[1];a+=t[2]}});return{unidades:u,total:a}}
-
-function ventaPDV(p){
-  var bus=p.posId?ventasG[p.posId]:null;var u=0,a=0,mc={};
-  if(bus)Object.keys(bus).forEach(function(b){
-    if(buSel!=='TODAS'&&b!==buSel)return;
-    bus[b].forEach(function(t){if(idxSel[t[0]]){u+=t[1];a+=t[2];mc[t[0]]=1}})});
-  var n=Object.keys(idxSel).length;
-  return{total:a,unidades:u,mesesConDato:Object.keys(mc).length,promedio:n>0?a/n:0}}
-
-// Venta del SKU seleccionado en un PDV concreto
-function ventaSku(p){
-  if(!distSku||!p.posId)return{total:0,unidades:0,mesesConDato:0};
-  var s=distSku[p.posId];if(!s)return{total:0,unidades:0,mesesConDato:0};
-  var u=0,a=0,mc=0;
-  s.forEach(function(t){if(idxSel[t[0]]){u+=t[1];a+=t[2];mc++}});
-  return{total:a,unidades:u,mesesConDato:mc}}
-
-function crearEscala(vals){
-  var pos=vals.filter(function(v){return v>0}).sort(function(a,b){return a-b});
-  if(!pos.length)return function(){return SEM.sin};
-  function q(p){return pos[Math.min(pos.length-1,Math.floor(p*pos.length))]}
-  var t1=q(.25),t2=q(.5),t3=q(.75);
-  return function(v){if(!v||v<=0)return SEM.sin;
-    if(v<=t1)return SEM.muybajo;if(v<=t2)return SEM.bajo;
-    if(v<=t3)return SEM.medio;return SEM.alto}}
-function colorCiudad(c){return CIUDADES[(c||'').toUpperCase().trim()]||'#898781'}
-
-/* ═══════════ PDV → Brick ═══════════ */
-var geomB=[];
-function asignarBricks(){
-  var ids={};geomB=[];
-  bricksG.forEach(function(b){ids[b.brickId.toUpperCase()]=b.brickId;
-    if(!b.geometry)return;
-    var polys=b.geometry.type==='Polygon'?[b.geometry.coordinates]:b.geometry.coordinates;
-    if(!polys.length)return;
-    var mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];
-    polys.forEach(function(p){(p[0]||[]).forEach(function(c){
-      if(c[0]<mn[0])mn[0]=c[0];if(c[0]>mx[0])mx[0]=c[0];
-      if(c[1]<mn[1])mn[1]=c[1];if(c[1]>mx[1])mx[1]=c[1]})});
-    geomB.push({id:b.brickId,polys:polys,bb:[mn[0],mn[1],mx[0],mx[1]]})});
-  puntosG.forEach(function(p){var crm=(p.brickCrm||'').toUpperCase();
-    if(crm&&ids[crm]){p._brick=ids[crm];return}p._brick=pip(p.lng,p.lat)})}
-function pip(x,y){for(var i=0;i<geomB.length;i++){var g=geomB[i],bb=g.bb;
-  if(x<bb[0]||x>bb[2]||y<bb[1]||y>bb[3])continue;
-  for(var j=0;j<g.polys.length;j++){var po=g.polys[j];
-    if(!ring(x,y,po[0]))continue;var h=false;
-    for(var k=1;k<po.length;k++)if(ring(x,y,po[k])){h=true;break}
-    if(!h)return g.id}}return''}
-function ring(x,y,r){var ins=false;
-  for(var i=0,j=r.length-1;i<r.length;j=i++){
-    var xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];
-    if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}return ins}
-
-/* ═══════════ Filtros ═══════════ */
-var DIMS=['grupo','channel','region','poblacion','potencial'];
-function cambiarFiltro(k,v){filtros[k]=v;actualizar();actProducto()}
-function limpiarFiltros(){filtros={grupo:'TODOS',channel:'TODOS',region:'TODOS',
-  poblacion:'TODOS',potencial:'TODOS',brick:'TODOS',pdv:'TODOS',agente:'TODOS'};
-  document.getElementById('brickSearch').value='';
-  document.getElementById('pdvSearch').value='';
-  document.getElementById('brickSelInfo').innerText='';
-  document.getElementById('pdvSelInfo').innerText='';
-  actualizar();actProducto()}
-// Asignaciones (VM/LAM) del PDV — un mismo PDV puede tener más de una fila en la hoja 'Asignacion'.
-function asignacionesDe(p){return(p.posId&&asignacionesG[p.posId])||[]}
-function tieneAgente(p){return asignacionesDe(p).length>0}
-function marcaAgenteTxt(p){return tieneAgente(p)?' 👤':''}
-function marcaAgenteHtml(p){
-  var as=asignacionesDe(p);if(!as.length)return'';
-  var detalle=as.map(function(a){return a.delegado+(a.tipo?' ('+a.tipo+')':'')}).join(', ');
-  return'<span class="badge-agente" title="'+esc(detalle)+'">👤</span>'}
-function pasa(p,ig){for(var i=0;i<DIMS.length;i++){var d=DIMS[i];
-  if(ig===d||filtros[d]==='TODOS')continue;if(p[d]!==filtros[d])return false}
-  if(ig!=='brick'&&filtros.brick!=='TODOS'&&(p._brick||'')!==filtros.brick)return false;
-  if(ig!=='pdv'&&filtros.pdv!=='TODOS'&&p.posId!==filtros.pdv&&p.name!==filtros.pdv)return false;
-  if(ig!=='agente'&&filtros.agente!=='TODOS'&&
-     !asignacionesDe(p).some(function(a){return a.delegado===filtros.agente}))return false;
-  return true}
-function cambiarModo(v){modoColor=v;recolorBricks()}
-
-/* ═══════════ Dropdowns inteligentes (buscador con cross-filtering) ═══════════ */
-var dropdownAbierto=null;
-var ETIQUETAS_TODOS={grupo:'Todos los grupos',channel:'Todos los canales',region:'Todas las regiones',
-  poblacion:'Todas las poblaciones',potencial:'Todos los potenciales',brick:'Todos los bricks',
-  pdv:'Todos los PDV',agente:'Todos los agentes',bu:'Todas las BU',sku:'— Vista general (sin producto) —'};
-var VALOR_TODOS={bu:'TODAS',sku:''};
-function valorTodos(tipo){return VALOR_TODOS.hasOwnProperty(tipo)?VALOR_TODOS[tipo]:'TODOS'}
-function valorSeleccionado(tipo){
-  if(tipo==='bu')return buSel;if(tipo==='sku')return skuSel;return filtros[tipo]}
-// Sin acentos y en mayúsculas, para que el buscador ignore tildes.
-function normTxt(s){return String(s==null?'':s).toUpperCase()
-  .normalize('NFD').replace(/\p{Diacritic}/gu,'')}
-// Escapa para incrustar en un atributo onclick: primero la comilla JS, luego el HTML
-// (en ese orden — al revés esc() deja la comilla como &#39; y el replace ya no la ve).
-function jsq(s){return esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"))}
-
-function opcionesDropdown(tipo){
-  if(tipo==='bu')return busD.map(function(b){return{valor:b,etiqueta:b}});
-  if(tipo==='sku'){
-    var sinPeriodo=Object.keys(idxSel).length===0,bs=normBu(buSel);
-    return Object.keys(productosG).map(function(k){
-        var p=productosG[k];
-        return{valor:k,etiqueta:(p.d||k)+(p.bu?' · '+p.bu:''),bu:p.bu||'',
-          tot:sinPeriodo?sumarSerieTotal(p.s):sumarSerie(p.s).total}})
-      .filter(function(x){return bs==='TODAS'||!x.bu||normBu(x.bu)===bs})
-      .sort(function(a,b){return b.tot-a.tot})}
-  if(tipo==='brick'){
-    var cnt={};
-    puntosG.forEach(function(p){if(!p._brick||!pasa(p,'brick'))return;
-      cnt[p._brick]=(cnt[p._brick]||0)+1});
-    return bricksG.filter(function(b){return cnt[b.brickId]}).map(function(b){
-        return{valor:b.brickId,etiqueta:b.nombreBrick||b.nombre||b.brickId,cnt:cnt[b.brickId]}})
-      .sort(function(a,b){return b.cnt-a.cnt})}
-  if(tipo==='pdv')
-    return puntosG.filter(function(p){return pasa(p,'pdv')})
-      .map(function(p){return{valor:p.posId,etiqueta:p.name+' · '+p.posId}})
-      .sort(function(a,b){return a.etiqueta<b.etiqueta?-1:a.etiqueta>b.etiqueta?1:0});
-  if(tipo==='agente'){
-    var cnt={};
-    puntosG.forEach(function(p){if(!pasa(p,'agente'))return;
-      asignacionesDe(p).forEach(function(a){cnt[a.delegado]=(cnt[a.delegado]||0)+1})});
-    return Object.keys(cnt).sort().map(function(k){return{valor:k,etiqueta:k,cnt:cnt[k]}})}
-  var cnt={};
-  puntosG.forEach(function(p){if(pasa(p,tipo))cnt[p[tipo]]=(cnt[p[tipo]]||0)+1});
-  return Object.keys(cnt).filter(Boolean).sort().map(function(k){return{valor:k,etiqueta:k,cnt:cnt[k]}})}
-
-function renderDropdown(tipo,query){
-  var cont=document.getElementById(tipo+'Dropdown');if(!cont)return;
-  var todas=opcionesDropdown(tipo),q=normTxt(query);
-  var filtradas=q?todas.filter(function(o){return normTxt(o.etiqueta).indexOf(q)!==-1}):todas;
-  var TOPE=tipo==='pdv'?50:filtradas.length;
-  var recortadas=filtradas.slice(0,TOPE),sel=valorSeleccionado(tipo),html='';
-
-  if(!q){
-    var vTodos=valorTodos(tipo),etqTodos=ETIQUETAS_TODOS[tipo]||'Todos';
-    var totTodos=todas.reduce(function(s,o){return s+(o.cnt||0)},0);
-    html+='<div class="opcion'+(sel===vTodos?' seleccionado':'')+'" onclick="seleccionarOpcion(\''+
-      tipo+'\',\''+jsq(vTodos)+'\',\''+jsq(etqTodos)+'\')">'+esc(etqTodos)+
-      (totTodos?' ('+FMT.format(totTodos)+')':'')+'</div>'}
-  if(!recortadas.length){
-    html+='<div class="empty">Sin resultados</div>';
-  }else{
-    recortadas.forEach(function(o){
-      var etqTxt=o.etiqueta+(o.cnt!=null?' ('+FMT.format(o.cnt)+')':'');
-      html+='<div class="opcion'+(o.valor===sel?' seleccionado':'')+'" onclick="seleccionarOpcion(\''+
-        tipo+'\',\''+jsq(o.valor)+'\',\''+jsq(o.etiqueta)+'\')">'+esc(etqTxt)+'</div>'});
-    if(filtradas.length>recortadas.length)
-      html+='<div class="empty">+ '+FMT.format(filtradas.length-recortadas.length)+
-        ' más — sigue escribiendo para refinar</div>'}
-  cont.innerHTML=html}
-
-function seleccionarOpcion(tipo,valor,etiqueta){
-  var input=document.getElementById(tipo+'Search');
-  if(input)input.value=(valor===valorTodos(tipo))?'':etiqueta;
-  cerrarTodosDropdowns();
-  if(tipo==='bu'){cambiarBu(valor);return}
-  if(tipo==='sku'){seleccionarSku(valor);return}
-  cambiarFiltro(tipo,valor);
-  if(tipo==='brick'){
-    var info=document.getElementById('brickSelInfo');
-    if(info){var agg=agBricks[valor];
-      info.innerText=(valor!=='TODOS'&&agg)?agg.pdvs.length+' PDV en este brick':''}}
-  if(tipo==='pdv'){var pinfo=document.getElementById('pdvSelInfo');if(pinfo)pinfo.innerText=''}}
-
-// Filtra el mapa a un solo brick sin tocar el popup (lo usa el clic directo sobre
-// el polígono, que además refresca el contenido del popup ya abierto).
-function aplicarFiltroBrick(brickId){
-  cambiarFiltro('brick',brickId);
-  var input=document.getElementById('brickSearch');if(input)input.value=brickId;
-  var info=document.getElementById('brickSelInfo');
-  if(info){var agg=agBricks[brickId];info.innerText=agg?agg.pdvs.length+' PDV en este brick':''}}
-// Variante para el botón del popup: además lo cierra, como confirmación de "listo".
-function filtrarPorBrick(brickId){aplicarFiltroBrick(brickId);map.closePopup()}
-
-function cerrarTodosDropdowns(){
-  document.querySelectorAll('.smart-dropdown').forEach(function(d){d.style.display='none'});
-  dropdownAbierto=null}
-function abrirDropdown(tipo){
-  cerrarTodosDropdowns();renderDropdown(tipo,'');
-  document.getElementById(tipo+'Dropdown').style.display='block';dropdownAbierto=tipo}
-function filtrarDropdown(tipo){
-  var q=document.getElementById(tipo+'Search').value;renderDropdown(tipo,q);
-  document.getElementById(tipo+'Dropdown').style.display='block';dropdownAbierto=tipo}
-document.addEventListener('click',function(e){
-  if(!e.target.closest('.smart-dropdown')&&!e.target.matches('[id$="Search"]'))cerrarTodosDropdowns()});
-
-// Reconstruye las opciones de brick/PDV (y sincroniza los inputs de texto de todos los
-// filtros convertidos) con cross-filtering, igual que antes hacía llenarSel con los <select>.
-function llenarDropdowns(){
-  ['grupo','channel','region','poblacion','potencial','brick','pdv','agente'].forEach(function(tipo){
-    var input=document.getElementById(tipo+'Search');
-    if(!input||filtros[tipo]!=='TODOS'||document.activeElement===input)return;
-    input.value='';
-    if(tipo==='brick'){var bi=document.getElementById('brickSelInfo');if(bi)bi.innerText=''}
-    if(tipo==='pdv'){var pi=document.getElementById('pdvSelInfo');if(pi)pi.innerText=''}});
-  if(dropdownAbierto){
-    var si=document.getElementById(dropdownAbierto+'Search');
-    if(si)renderDropdown(dropdownAbierto,si.value)}}
-
-/* ═══════════ Actualización global ═══════════ */
-function actualizar(){
-  var cnt={};DIMS.forEach(function(d){cnt[d]={}});
-  puntosG.forEach(function(p){DIMS.forEach(function(d){
-    if(pasa(p,d))cnt[d][p[d]]=(cnt[d][p[d]]||0)+1})});
-  DIMS.forEach(function(d){if(filtros[d]!=='TODOS'&&!cnt[d][filtros[d]])filtros[d]='TODOS'});
-
-  var cntBrick={};
-  puntosG.forEach(function(p){if(!p._brick||!pasa(p,'brick'))return;
-    cntBrick[p._brick]=(cntBrick[p._brick]||0)+1});
-  if(filtros.brick!=='TODOS'&&!cntBrick[filtros.brick])filtros.brick='TODOS';
-  if(filtros.pdv!=='TODOS'&&!puntosG.some(function(p){
-    return(p.posId===filtros.pdv||p.name===filtros.pdv)&&pasa(p,'pdv')}))filtros.pdv='TODOS';
-  if(filtros.agente!=='TODOS'&&!puntosG.some(function(p){
-    return pasa(p,'agente')&&asignacionesDe(p).some(function(a){return a.delegado===filtros.agente})}))
-    filtros.agente='TODOS';
-
-  var vis=puntosG.filter(function(p){return pasa(p,null)});
-  var vv=vis.map(ventaPDV);
-
-  llenarDropdowns();
-
-  agBricks={};
-  vis.forEach(function(p,i){if(!p._brick)return;
-    var s=agBricks[p._brick];if(!s)s=agBricks[p._brick]={total:0,pdvs:[]};
-    s.total+=vv[i].total;s.pdvs.push({p:p,v:vv[i]})});
-  Object.keys(agBricks).forEach(function(id){
-    agBricks[id].pdvs.sort(function(a,b){return b.v.total-a.v.total})});
-
-  if(skuSel)kpisProducto(vis);else kpisGeneral(vis,vv);
-  recolorBricks();dibujarPuntos(vis,vv);dibujarTop(vis,vv);
-  barras('chartCanal',agVentas(vis,vv,'channel'),'channel',0);
-  barras('chartGrupo',agVentas(vis,vv,'grupo'),'grupo',10);
-  barras('chartRegion',agVentas(vis,vv,'region'),'region',10)}
-
-function agVentas(ps,vv,d){var a={},n={};
-  ps.forEach(function(p,i){a[p[d]]=(a[p[d]]||0)+vv[i].total;n[p[d]]=(n[p[d]]||0)+1});
-  return Object.keys(a).map(function(k){return{clave:k,n:a[k],pdvs:n[k]}})
-    .sort(function(a,b){return b.n-a.n})}
-
-/* ═══════════ KPIs ═══════════ */
-function kpi(label,valor,hint,prod){
-  return'<div class="card kpi'+(prod?' modo-prod':'')+'"><div class="label">'+label+
-    '</div><div class="value">'+valor+'</div><div class="hint">'+hint+'</div></div>'}
-
-function kpisGeneral(vis,vv){
-  var tot=0,uni=0,con=0;
-  vv.forEach(function(v){tot+=v.total;uni+=v.unidades;if(v.total>0)con++});
-  var nm=Object.keys(idxSel).length;
-  document.getElementById('kpis').innerHTML=
-    kpi('PDV con Sell Out',FMT.format(con),'de '+FMT.format(vis.length)+' PDV visibles')+
-    kpi('Sell Out (período)',fc(tot),nm+(nm===1?' mes':' meses')+(buSel!=='TODAS'?' · '+buSel:''))+
-    kpi('Promedio mensual',nm>0?fc(tot/nm):'–','Sell Out / mes')+
-    kpi('Unidades',FMT.format(Math.round(uni)),'unidades del período')}
-
-function kpisProducto(vis){
-  var meta=productosG[skuSel]||{d:skuSel};
-  if(cargandoSku||!distSku){
-    document.getElementById('kpis').innerHTML=kpi('Producto','…','Consultando distribución…',true);return}
-  var tot=0,uni=0,con=0;
-  vis.forEach(function(p){var s=ventaSku(p);
-    if(s.total>0||s.unidades>0){con++;tot+=s.total;uni+=s.unidades}});
-  var nm=Object.keys(idxSel).length;
-  var cob=vis.length?100*con/vis.length:0;
-  var precio=uni>0?tot/uni:0;
-  var rot=(con>0&&nm>0)?uni/con/nm:0;
-  document.getElementById('kpis').innerHTML=
-    kpi('Sell Out del producto',fc(tot),esc(meta.d||skuSel),true)+
-    kpi('Cobertura',cob.toFixed(1)+'%',FMT.format(con)+' de '+FMT.format(vis.length)+' PDV lo venden',true)+
-    kpi('Rotación',rot.toFixed(1),'unidades / PDV / mes',true)+
-    kpi('Precio promedio',fd(precio),'ponderado por volumen',true)+
-    kpi('Unidades',FMT.format(Math.round(uni)),'del período',true)}
-
-/* ═══════════ Barras ═══════════ */
-function pintarBarras(id,datos,ops){
-  ops=ops||{};var c=document.getElementById(id);c.innerHTML='';
-  var cv=datos.filter(function(d){return d.n>0});
-  if(!cv.length){c.innerHTML='<div class="chart-hint">'+(ops.vacio||'Sin datos')+'</div>';return}
-  var top=ops.topN||0,mos=top>0?cv.slice(0,top):cv,mx=mos[0].n;
-  mos.forEach(function(d){
-    var f=document.createElement('div');
-    f.className='barra-fila'+(d.clase?' '+d.clase:'');
-    if(d.tit)f.title=d.tit;if(d.fn)f.onclick=d.fn;else f.style.cursor='default';
-    var cat=document.createElement('div');cat.className='cat';cat.innerText=d.clave;
-    var val=document.createElement('div');val.className='valor';val.innerText=d.etq||fc(d.n);
-    var pi=document.createElement('div');pi.className='barra-pista';
-    var re=document.createElement('div');re.className='barra-relleno';
-    re.style.width=Math.max(2,Math.round(100*d.n/mx))+'%';
-    pi.appendChild(re);f.appendChild(cat);f.appendChild(val);f.appendChild(pi);c.appendChild(f)});
-  if(top>0&&cv.length>top){var r=cv.slice(top).reduce(function(s,d){return s+d.n},0);
-    var n=document.createElement('div');n.className='chart-hint';
-    n.innerText='+ '+FMT.format(cv.length-top)+' más ('+fc(r)+')';c.appendChild(n)}}
-
-function barras(id,datos,dim,top){
-  var hs=filtros[dim]!=='TODOS';
-  pintarBarras(id,datos.map(function(d){return{clave:d.clave,n:d.n,
-    clase:hs?(d.clave===filtros[dim]?'activa':'apagada'):'',
-    tit:d.clave+': '+fd(d.n)+' · '+FMT.format(d.pdvs)+' PDV',
-    fn:function(){cambiarFiltro(dim,filtros[dim]===d.clave?'TODOS':d.clave)}}}),
-    {topN:top,vacio:'Sin Sell Out en la selección'})}
-
-/* ═══════════ Top PDV ═══════════ */
-function dibujarTop(vis,vv){
-  var dat;
-  if(skuSel&&distSku){
-    dat=vis.map(function(p,i){return{p:p,s:ventaSku(p),idx:i}})
-      .filter(function(x){return x.s.total>0})
-      .sort(function(a,b){return b.s.total-a.s.total}).slice(0,10)
-      .map(function(x){return{clave:x.p.name+marcaAgenteTxt(x.p),n:x.s.total,clase:'prod',
-        tit:x.p.name+' · '+fd(x.s.total)+' · '+FMT.format(Math.round(x.s.unidades))+' und.',
-        fn:function(){map.setView([x.p.lat,x.p.lng],16);
-          var m=marcIdx[x.idx];if(m)m.openPopup()}}});
-  }else{
-    dat=vis.map(function(p,i){return{p:p,v:vv[i],idx:i}})
-      .filter(function(x){return x.v.total>0})
-      .sort(function(a,b){return b.v.total-a.v.total}).slice(0,10)
-      .map(function(x){return{clave:x.p.name+marcaAgenteTxt(x.p),n:x.v.total,
-        tit:x.p.name+' · '+fd(x.v.total)+' · Potencial '+x.p.potencial,
-        fn:function(){map.setView([x.p.lat,x.p.lng],16);
-          var m=marcIdx[x.idx];if(m)m.openPopup();verPortPdv(x.p)}}})}
-  pintarBarras('chartTop',dat,{vacio:'Sin Sell Out en la selección'})}
-
-/* ═══════════ Portafolio global ═══════════ */
-function dibujarPort(){
-  // Sin Sell Out no hay idxSel: dibujar ahora dejaría el panel en "Sin datos".
-  if(!listo.ventas||!listo.port)return;
-  var bs=normBu(buSel);
-  var dat=Object.keys(productosG).map(function(sku){
-    var pr=productosG[sku];
-    if(bs!=='TODAS'&&pr.bu&&normBu(pr.bu)!==bs)return null;
-    var s=sumarSerie(pr.s);
-    return{clave:pr.d||sku,n:s.total,
-      tit:(pr.d||sku)+'\nSKU '+sku+(pr.bu?' · '+pr.bu:'')+'\n'+fd(s.total)+
-        ' · '+FMT.format(Math.round(s.unidades))+' und.\nClic para analizar este producto',
-      fn:function(){seleccionarSku(sku)}}
-  }).filter(Boolean).sort(function(a,b){return b.n-a.n});
-  pintarBarras('chartPort',dat,{topN:12,vacio:'Sin datos'})}
-
-/* ═══════════ Panel de producto: tendencia y brechas ═══════════ */
-function actProducto(){
-  if(!skuSel||!distSku){document.getElementById('bqBrecha').style.display='none';return}
-  var meta=productosG[skuSel]||{d:skuSel};
-  var vis=puntosG.filter(function(p){return pasa(p,null)});
-
-  // Brechas: PDV con alto Sell Out total que NO venden este producto
-  var brechas=vis.map(function(p){return{p:p,v:ventaPDV(p),s:ventaSku(p)}})
-    .filter(function(x){return x.v.total>0&&x.s.total===0})
-    .sort(function(a,b){return b.v.total-a.v.total}).slice(0,10)
-    .map(function(x){return{clave:x.p.name+marcaAgenteTxt(x.p),n:x.v.total,clase:'brecha',
-      tit:x.p.name+'\nSell Out total: '+fd(x.v.total)+
-        '\nPotencial: '+x.p.potencial+'\nNO vende '+(meta.d||skuSel),
-      fn:function(){map.setView([x.p.lat,x.p.lng],16)}}});
-  pintarBarras('chartBrecha',brechas,{vacio:'Todos los PDV de volumen ya venden el producto'});
-  document.getElementById('bqBrecha').style.display='block'}
-
-/* ═══════════ Detalle por PDV ═══════════ */
-var detActual=null;
-function mostrarDetalle(t,h,p){detActual={t:t,h:h,p:p};
-  document.getElementById('bqDetalle').style.display='block';
-  document.getElementById('detTit').innerText=t;
-  document.getElementById('detHint').innerText=h;refDet();
-  document.querySelector('.charts').scrollTop=0}
-function refDet(){
-  if(!detActual)return;var ps=detActual.p;
-  if(!ps){document.getElementById('chartDetalle').innerHTML=
-    '<div class="chart-hint">Consultando…</div>';return}
-  var dat=Object.keys(ps).map(function(sku){
-    var m=productosG[sku]||{d:sku,bu:''};
-    if(normBu(buSel)!=='TODAS'&&m.bu&&normBu(m.bu)!==normBu(buSel))return null;
-    var s=sumarSerie(ps[sku]);
-    return{clave:m.d||sku,n:s.total,
-      tit:(m.d||sku)+' · '+fd(s.total)+' · '+FMT.format(Math.round(s.unidades))+' und.'+
-        '\nClic para analizar este producto en el mapa',
-      fn:function(){seleccionarSku(sku)}}
-  }).filter(Boolean).sort(function(a,b){return b.n-a.n});
-  pintarBarras('chartDetalle',dat,{topN:15,vacio:'Sin ventas en el período'})}
-function cerrarDetalle(){detActual=null;document.getElementById('bqDetalle').style.display='none'}
-
-function verPortPdv(p){
-  if(!esGas()){mostrarDetalle('Portafolio · '+p.name,'Modo local',{});return}
-  mostrarDetalle('Portafolio · '+p.name,'Consultando…',null);
-  google.script.run.withSuccessHandler(function(j){var r=JSON.parse(j);
-      mostrarDetalle('Portafolio · '+p.name,'POS_ID '+r.posId,r.productos||{})})
-    .withFailureHandler(function(e){mostrarDetalle('Portafolio · '+p.name,'Error: '+me(e),{})})
-    .getDetallePdvJson(p.posId)}
-
-function verPortBrick(bid){
-  var agg=agBricks[bid];if(!agg||!agg.pdvs.length){avisar('Sin PDV en ese brick.');return}
-  var ids=agg.pdvs.map(function(x){return x.p.posId}).filter(Boolean);
-  if(!ids.length)return;
-  mostrarDetalle('Portafolio · Brick '+bid,'Agregando '+ids.length+' PDV…',null);
-  if(!esGas())return;
-  google.script.run.withSuccessHandler(function(j){var r=JSON.parse(j);
-      mostrarDetalle('Portafolio · Brick '+bid,
-        r.pdvConVentas+' de '+r.pdvConsultados+' PDV con ventas',r.productos||{})})
-    .withFailureHandler(function(e){mostrarDetalle('Portafolio · Brick '+bid,'Error: '+me(e),{})})
-    .getDetalleAgregadoJson(ids.join(','))}
-
-/* ═══════════ Bricks ═══════════ */
-function dibujarBricks(){
-  bLayer.clearLayers();capaBrick={};bbBricks=L.latLngBounds([]);var n=0;
-  bricksG.forEach(function(b){if(!b.geometry)return;
-    try{var capa=L.geoJSON(b.geometry,{renderer:lienzo,
-        style:{color:SEM.sin,weight:2,opacity:.9,fillColor:SEM.sin,fillOpacity:.18}});
-      capa.bindPopup(function(){return popupBrick(b)},{maxWidth:320});
-      // Un clic en el brick ya filtra el mapa a sus PDV (antes hacía falta abrir el
-      // popup y pulsar el botón). El popup igual se abre; se refresca con setPopupContent
-      // porque Leaflet ya lo abrió con el contenido de ANTES de filtrar.
-      capa.on('click',function(){aplicarFiltroBrick(b.brickId);capa.setPopupContent(popupBrick(b))});
-      capa.addTo(bLayer);capaBrick[b.brickId]=capa;bbBricks.extend(capa.getBounds());n++
-    }catch(e){}});
-  bLayer.bringToBack()}
-
-function recolorBricks(){
-  var esc2,porCiudad={};
-  if(skuSel&&distSku){
-    var agSku={};
-    puntosG.filter(function(p){return pasa(p,null)}).forEach(function(p){
-      if(!p._brick)return;var s=ventaSku(p);
-      agSku[p._brick]=(agSku[p._brick]||0)+s.total});
-    esc2=crearEscala(Object.keys(agSku).map(function(k){return agSku[k]}));
-    bricksG.forEach(function(b){var c=capaBrick[b.brickId];if(!c)return;
-      var tot=agSku[b.brickId]||0;var col=modoColor==='ciudad'?colorCiudad(b.ciudad):esc2(tot);
-      if(modoColor==='ciudad')porCiudad[(b.ciudad||'SIN CIUDAD').toUpperCase()]=col;
-      c.setStyle({color:col,fillColor:col,fillOpacity:tot>0?.35:.12,weight:2,opacity:.9})});
-  }else{
-    var tots=Object.keys(agBricks).map(function(id){return agBricks[id].total});
-    esc2=crearEscala(tots);
-    bricksG.forEach(function(b){var c=capaBrick[b.brickId];if(!c)return;
-      var col,op;
-      if(modoColor==='ciudad'){col=colorCiudad(b.ciudad);op=.20;
-        porCiudad[(b.ciudad||'SIN CIUDAD').toUpperCase()]=col}
-      else{var agg=agBricks[b.brickId];var t=agg?agg.total:0;col=esc2(t);op=t>0?.35:.15}
-      c.setStyle({color:col,fillColor:col,fillOpacity:op,weight:2,opacity:.9})})}
-  renderLey(porCiudad)}
-
-function renderLey(pc){
-  var c=document.getElementById('leyBricks');c.innerHTML='';
-  var filas=modoColor==='ciudad'
-    ?Object.keys(pc).sort().map(function(k){return[pc[k],k]})
-    :[[SEM.alto,'Alto (cuartil superior)'],[SEM.medio,'Medio'],[SEM.bajo,'Bajo'],
-      [SEM.muybajo,'Muy bajo (cuartil inferior)'],
-      [SEM.sin,skuSel?'Sin este producto':'Sin ventas en el período']];
-  filas.forEach(function(f){var r=document.createElement('div');r.className='fila';
-    var s=document.createElement('span');s.className='swatch';s.style.background=f[0];
-    r.appendChild(s);r.appendChild(document.createTextNode(f[1]));c.appendChild(r)})}
-
-function popupBrick(b){
-  var agg=agBricks[b.brickId];
-  var h='<div class="popup-brick"><h3>'+esc(b.nombreBrick||b.nombre||b.brickId)+'</h3>'+
-    '<b>Brick ID:</b> '+esc(b.brickId)+'<br>'+
-    '<b>Ciudad:</b> '+esc(b.ciudad||'–')+' · <b>Zona:</b> '+esc(b.zona||'–')+'<br>';
-  if(skuSel&&distSku){
-    var meta=productosG[skuSel]||{d:skuSel};
-    // Separa los PDV del brick en los que sí venden el SKU y los que no (brechas del brick).
-    var conProducto=[],sinProducto=[];
-    if(agg)agg.pdvs.forEach(function(x){var s=ventaSku(x.p);
-      if(s.total>0)conProducto.push({p:x.p,s:s});else sinProducto.push({p:x.p,v:x.v})});
-    conProducto.sort(function(a,b){return b.s.total-a.s.total});
-    sinProducto.sort(function(a,b){return b.v.total-a.v.total});
-    var tp=agg?agg.pdvs.length:0,con=conProducto.length;
-    var tot=conProducto.reduce(function(s,x){return s+x.s.total},0);
-    var uni=conProducto.reduce(function(s,x){return s+x.s.unidades},0);
-    h+='<div class="popup-sellout prod"><span class="grande">'+fd(tot)+'</span><br>'+
-      '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
-      '<b>Cobertura:</b> '+con+' de '+tp+' PDV ('+(tp?Math.round(100*con/tp):0)+'%)<br>'+
-      '<b>Unidades:</b> '+FMT.format(Math.round(uni))+'</div>';
-    if(con){
-      h+='<b>Sí venden:</b><ol>';
-      conProducto.slice(0,4).forEach(function(x){
-        h+='<li>'+esc(x.p.name)+marcaAgenteHtml(x.p)+'<br><span class="mini">'+fd(x.s.total)+'</span></li>'});
-      h+='</ol>';
-      if(con>4)h+='<span class="mini">+ '+FMT.format(con-4)+' más</span>'}
-    if(sinProducto.length){
-      h+='<b>NO venden (brecha):</b><ol>';
-      sinProducto.slice(0,4).forEach(function(x){
-        h+='<li>'+esc(x.p.name)+marcaAgenteHtml(x.p)+'<br><span class="mini">Sell Out total: '+fd(x.v.total)+'</span></li>'});
-      h+='</ol>';
-      if(sinProducto.length>4)h+='<span class="mini">+ '+FMT.format(sinProducto.length-4)+' más</span>'}
-  }else if(!agg||!agg.pdvs.length){
-    h+='<div class="popup-sellout">Sin PDV con Sell Out en los filtros actuales.</div>'
-  }else{
-    h+='<div class="popup-sellout"><span class="grande">'+fd(agg.total)+'</span><br>'+
-      '<span class="mini">Sell Out del período · '+FMT.format(agg.pdvs.length)+' PDV</span></div>'+
-      '<b>Top PDV:</b><ol>';
-    agg.pdvs.slice(0,5).forEach(function(x){
-      h+='<li>'+esc(x.p.name)+' <span class="badge-pot">'+esc(x.p.potencial)+'</span>'+
-        marcaAgenteHtml(x.p)+'<br><span class="mini">'+fd(x.v.total)+'</span></li>'});
-    h+='</ol>';
-    if(agg.pdvs.length>5)h+='<span class="mini">+ '+FMT.format(agg.pdvs.length-5)+' más</span>';
-    h+='<button class="btn-portafolio" onclick="verPortBrick(\''+
-      esc(b.brickId).replace(/'/g,"\\'")+'\')">Ver portafolio del brick</button>'}
-  h+='<button class="btn-portafolio" style="margin-top:6px" onclick="filtrarPorBrick(\''+
-    esc(b.brickId).replace(/'/g,"\\'")+'\')">Ver solo PDV de este brick</button>';
-  return h+'</div>'}
-
-function alternarBricks(){
-  if(document.getElementById('togBricks').checked){map.addLayer(bLayer);bLayer.bringToBack()}
-  else map.removeLayer(bLayer)}
-
-/* ═══════════ Puntos ═══════════ */
-function dibujarPuntos(vis,vv){
-  pLayer.clearLayers();marcIdx={};pdvIdx={};if(!vis.length)return;
-  var verSin=document.getElementById('togSinProd').checked;
-  var modoProd=!!(skuSel&&distSku);
-  var valores=modoProd?vis.map(function(p){return ventaSku(p).total})
-                      :vv.map(function(v){return v.total});
-  var esc2=crearEscala(valores);
-  var mx=valores.reduce(function(m,v){return Math.max(m,v)},0);
-  var bb=L.latLngBounds([]);
-
-  vis.forEach(function(p,i){
-    var val=modoProd?ventaSku(p).total:vv[i].total;
-    if(modoProd&&val<=0&&!verSin)return;
-    var col=esc2(val),r=5;
-    if(mx>0&&val>0)r=5+11*Math.sqrt(val/mx);
-    if(modoProd&&val<=0)r=3.5;
-    var mk=L.circleMarker([p.lat,p.lng],{renderer:lienzo,radius:r,
-      color:'#fff',weight:1,fillColor:col,fillOpacity:(modoProd&&val<=0)?.45:.9});
-    mk.bindPopup(function(){return popupPdv(p,i)},{maxWidth:300});
-    mk.addTo(pLayer);marcIdx[i]=mk;pdvIdx[i]=p;bb.extend([p.lat,p.lng])});
-
-  if(document.getElementById('togZoom').checked&&bb.isValid())
-    map.fitBounds(bb,{padding:[40,40],maxZoom:15})}
-
-function popupPdv(p,i){
-  var v=ventaPDV(p);var nm=Object.keys(idxSel).length;
-  var h='<div class="popup-pdv"><h3>'+esc(p.name)+
-    '<span class="badge-pot">'+esc(p.potencial)+'</span>'+marcaAgenteHtml(p)+'</h3>';
-
-  if(skuSel&&distSku){
-    var meta=productosG[skuSel]||{d:skuSel};var s=ventaSku(p);
-    var precio=s.unidades>0?s.total/s.unidades:0;
-    var rot=(nm>0&&s.unidades>0)?s.unidades/nm:0;
-    if(s.total>0){
-      h+='<div class="popup-sellout prod">'+
-        '<span class="grande">'+fd(s.total)+'</span><br>'+
-        '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
-        '<b>Unidades:</b> '+FMT.format(Math.round(s.unidades))+'<br>'+
-        '<b>Rotación:</b> '+rot.toFixed(1)+' und./mes<br>'+
-        '<b>Precio prom.:</b> '+fd(precio)+'<br>'+
-        '<b>Meses con venta:</b> '+s.mesesConDato+' de '+nm+'</div>';
-    }else{
-      h+='<div class="popup-sellout prod"><b>NO vende este producto</b><br>'+
-        '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
-        'Sell Out total del PDV: '+fd(v.total)+'</div>'}
-  }else if(ventasG[p.posId]){
-    h+='<div class="popup-sellout"><span class="grande">'+fd(v.promedio)+'</span> / mes<br>'+
-      '<span class="mini">Promedio sobre '+nm+(nm===1?' mes':' meses')+
-      (buSel!=='TODAS'?' · '+esc(buSel):'')+'</span><br>'+
-      '<b>Total período:</b> '+fd(v.total)+'<br>'+
-      '<b>Unidades:</b> '+FMT.format(Math.round(v.unidades))+'</div>';
-    var bus=ventasG[p.posId];
-    var lista=Object.keys(bus).map(function(b){return{b:b,a:sumarSerie(bus[b]).total}})
-      .filter(function(x){return x.a>0}).sort(function(x,y){return y.a-x.a});
-    if(lista.length)h+='<b>Por BU:</b> '+lista.slice(0,4)
-      .map(function(x){return esc(x.b)+' '+fc(x.a)}).join(' · ')+'<br>';
-    h+='<button class="btn-portafolio" onclick="verPortPdv(pdvIdx['+i+'])">'+
-      'Ver portafolio (producto a producto)</button>'
-  }else h+='<div class="popup-sellout"><span class="mini">Sin Sell Out en el período</span></div>';
-
-  h+=(p.posId?'<b>POS ID:</b> '+esc(p.posId)+'<br>':'')+
-    '<b>Dirección:</b> '+esc(p.direccion)+'<br>'+
-    '<b>Grupo:</b> '+esc(p.grupo)+'<br>'+
-    '<b>Canal:</b> '+esc(p.channel)+'<br>'+
-    '<b>Región:</b> '+esc(p.region)+' · <b>Población:</b> '+esc(p.poblacion)+'<br>'+
-    (p._brick?'<b>Brick:</b> '+esc(p._brick)+'<br>':'')+
-    (tieneAgente(p)?'<b>Agente:</b> '+esc(asignacionesDe(p).map(function(a){
-      return a.delegado+(a.tipo?' ('+a.tipo+')':'')}).join(', '))+'<br>':'')+
-    '<a class="enlace" href="https://www.google.com/maps?q='+p.lat+','+p.lng+
-    '" target="_blank" rel="noopener">Abrir en Google Maps</a></div>';
-  return h}
-
-/* ═══════════════════════════════════════════════════════════
- * PESTAÑA 2 · VENTAS MTD
- * Todo lo de abajo es independiente del visor: estado propio
- * (ventasMtdData, mtdFiltros) y funciones con prefijo mtd.
- * ═══════════════════════════════════════════════════════════ */
-
-let ventasMtdData=null;
-var mtdCargando=false,tabActivo='mapa';
-var MTD_MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-var MTD_COP=new Intl.NumberFormat('es-CO',
-  {style:'currency',currency:'COP',minimumFractionDigits:0,maximumFractionDigits:0});
-// Semáforo de cumplimiento: [mínimo, color del texto, fondo de la celda]
-var MTD_SEM=[[1,'#28a745','rgba(40,167,69,.15)'],[.85,'#ffc107','rgba(255,193,7,.15)'],
-             [.70,'#fd7e14','rgba(253,126,20,.15)'],[-Infinity,'#dc3545','rgba(220,53,69,.15)']];
-
-function mtdMoneda(v){return MTD_COP.format(Math.round(v||0))}
-function mtdPctTxt(v){return(v==null||!isFinite(v))?'–':
-  v.toLocaleString('es-CO',{style:'percent',minimumFractionDigits:1})}
-function mtdMillones(v){return(( v||0)/1e6).toLocaleString('es-CO',{maximumFractionDigits:0})+' M'}
-function mtdSem(v){var p=(v==null||!isFinite(v))?-Infinity:v;
-  for(var i=0;i<MTD_SEM.length;i++)if(p>=MTD_SEM[i][0])return MTD_SEM[i];
-  return MTD_SEM[MTD_SEM.length-1]}
-function mtdCeldaPct(v){var s=mtdSem(v);
-  return'<td class="celda-pct" style="color:'+s[1]+';background:'+s[2]+'">'+mtdPctTxt(v)+'</td>'}
-function mtdDelta(v){if(v==null||!isFinite(v))return'<td>–</td>';
-  return'<td class="'+(v>=0?'pos':'neg')+'">'+(v>0?'+':'')+mtdPctTxt(v)+'</td>'}
-
-/* ── Pestañas ── */
-function activarTab(t){
-  tabActivo=t;
-  document.body.classList.toggle('tab-mtd',t==='mtd');
-  document.getElementById('tabBtnMapa').classList.toggle('activo',t==='mapa');
-  document.getElementById('tabBtnMtd').classList.toggle('activo',t==='mtd');
-  // Leaflet mide mal el contenedor si estuvo oculto: hay que recalcular al volver.
-  if(t==='mapa'){setTimeout(function(){map.invalidateSize()},60);return}
-  if(ventasMtdData===null&&!mtdCargando)cargarVentasMtd()}
-
-/* ── Carga (perezosa: solo al entrar a la pestaña) ── */
-function cargarVentasMtd(forzar){
-  if(mtdCargando)return;
-  if(forzar)ventasMtdData=null;
-  mtdCargando=true;
-  document.getElementById('mtdContenido').style.display='none';
-  var est=document.getElementById('mtdEstado');
-  est.style.display='block';
-  est.innerHTML='<span class="mtd-spinner"></span>Cargando datos…';
-  if(!esGas()){setTimeout(function(){onVentasMtdCargado(mtdDatosDemo())},300);return}
-  google.script.run
-    .withSuccessHandler(function(j){
-      try{onVentasMtdCargado(JSON.parse(j))}
-      catch(e){mtdCargando=false;est.innerText='No pude leer la respuesta: '+me(e)}})
-    .withFailureHandler(function(e){
-      mtdCargando=false;
-      est.innerHTML='<b>No pude cargar Ventas MTD.</b><br>'+esc(me(e))+
-        '<br><span class="mini">Revisa las hojas CUMPLIMIENTO y PLANTILLA del archivo de Ventas MTD.</span>'})
-    .getVentasMtdJson()}
-
-function onVentasMtdCargado(data){
-  mtdCargando=false;
-  ventasMtdData=data||{cumplimiento:{filas:[],totales:null},productos:[],meta:{}};
-  var d=new Date();
-  document.getElementById('mtdSubtitulo').innerText=MTD_MESES[d.getMonth()]+' '+d.getFullYear();
-  var meta=ventasMtdData.meta||{};
-  document.getElementById('mtdActualizado').innerText=
-    meta.actualizadoEn?('Datos: '+new Date(meta.actualizadoEn).toLocaleString('es-CO')):'';
-  mtdLlenarSelects();
-  document.getElementById('mtdEstado').style.display='none';
-  document.getElementById('mtdContenido').style.display='block';
-  renderVentasMtd()}
-
-/* ── Filtros ── */
-function mtdLlenarSelects(){
-  var filas=(ventasMtdData.cumplimiento||{}).filas||[];
-  [['mtdCanal','canal','Todos los canales'],['mtdKam','kam','Todos los KAM']]
-    .forEach(function(cfg){
-      var sel=document.getElementById(cfg[0]),prev=sel.value||'TODOS',vals={};
-      filas.forEach(function(f){var v=(f[cfg[1]]||'').trim();if(v)vals[v]=1});
-      var html='<option value="TODOS">'+cfg[2]+'</option>';
-      Object.keys(vals).sort().forEach(function(v){
-        html+='<option value="'+esc(v)+'">'+esc(v)+'</option>'});
-      sel.innerHTML=html;sel.value=prev;if(sel.selectedIndex<0)sel.value='TODOS'})}
-
-function mtdLimpiarFiltros(){
-  document.getElementById('mtdCanal').value='TODOS';
-  document.getElementById('mtdKam').value='TODOS';
-  document.getElementById('mtdCliente').value='';
-  renderVentasMtd()}
-
-function mtdFilasFiltradas(){
-  var filas=(ventasMtdData.cumplimiento||{}).filas||[];
-  var canal=document.getElementById('mtdCanal').value||'TODOS';
-  var kam=document.getElementById('mtdKam').value||'TODOS';
-  var q=normTxt(document.getElementById('mtdCliente').value||'');
-  return filas.filter(function(f){
-    if(canal!=='TODOS'&&(f.canal||'')!==canal)return false;
-    if(kam!=='TODOS'&&(f.kam||'')!==kam)return false;
-    if(q&&normTxt(f.cliente).indexOf(q)===-1)return false;
-    return true})}
-
-/* ── Render ── */
-function renderVentasMtd(){
-  if(!ventasMtdData)return;
-  var filas=mtdFilasFiltradas();
-  var tot=filas.reduce(function(a,f){
-    a.realMes+=f.realMes||0;a.planMes+=f.planMes||0;
-    a.realAnio+=f.realAnio||0;a.planAnio+=f.planAnio||0;return a},
-    {realMes:0,planMes:0,realAnio:0,planAnio:0});
-  tot.cumplPct=tot.planMes?tot.realMes/tot.planMes:null;
-  mtdRenderKpi(tot,filas.length);
-  mtdRenderClientes(filas,tot);
-  mtdRenderKam(filas);
-  mtdRenderProductos()}
-
-function mtdRenderKpi(tot,nFilas){
-  var sem=mtdSem(tot.cumplPct);
-  document.getElementById('mtdKpiVenta').innerText=mtdMillones(tot.realMes);
-  document.getElementById('mtdKpiVentaDet').innerText=
-    mtdMoneda(tot.realMes)+' · vs Plan '+mtdMoneda(tot.planMes);
-  var pct=document.getElementById('mtdKpiPct');
-  pct.innerText=mtdPctTxt(tot.cumplPct);pct.style.color=sem[1];
-  document.getElementById('mtdKpiPctDet').innerText=
-    nFilas+(nFilas===1?' cliente':' clientes')+' en la selección';
-  document.getElementById('mtdKpiAnio').innerText=mtdMillones(tot.realAnio);
-  document.getElementById('mtdKpiAnioDet').innerText=
-    'Plan año '+mtdMoneda(tot.planAnio)+
-    (tot.planAnio?' · '+mtdPctTxt(tot.realAnio/tot.planAnio):'');
-  var barra=document.getElementById('mtdKpiBarra');
-  var p=(tot.cumplPct==null||!isFinite(tot.cumplPct))?0:Math.max(0,Math.min(100,tot.cumplPct*100));
-  barra.style.width=p+'%';barra.style.background=sem[1]}
-
-function mtdVacio(tabla,msg){
-  document.getElementById(tabla).innerHTML=
-    '<tbody><tr><td class="mtd-vacio">'+esc(msg)+'</td></tr></tbody>'}
-
-function mtdRenderClientes(filas,tot){
-  document.getElementById('mtdHintClientes').innerText=
-    filas.length+' de '+((ventasMtdData.cumplimiento||{}).filas||[]).length+' clientes · ordenado por venta del mes';
-  if(!filas.length){mtdVacio('mtdTablaClientes','Sin clientes con los filtros actuales');return}
-  var orden=filas.slice().sort(function(a,b){return(b.realMes||0)-(a.realMes||0)});
-  var h='<thead><tr><th>Cliente</th><th>Canal</th><th>KAM</th><th>Venta Mes</th>'+
-        '<th>Plan Mes</th><th>% Cumpl</th><th>Venta Año</th><th>Plan Año</th></tr></thead><tbody>';
-  orden.forEach(function(f){
-    h+='<tr><td>'+esc(f.cliente||f.sapId||'–')+'</td><td>'+esc(f.canal||'–')+'</td>'+
-       '<td>'+esc(f.kam||'–')+'</td><td>'+mtdMoneda(f.realMes)+'</td>'+
-       '<td>'+mtdMoneda(f.planMes)+'</td>'+mtdCeldaPct(f.cumplPct)+
-       '<td>'+mtdMoneda(f.realAnio)+'</td><td>'+mtdMoneda(f.planAnio)+'</td></tr>'});
-  h+='<tr class="total"><td>TOTAL</td><td></td><td></td><td>'+mtdMoneda(tot.realMes)+'</td>'+
-     '<td>'+mtdMoneda(tot.planMes)+'</td>'+mtdCeldaPct(tot.cumplPct)+
-     '<td>'+mtdMoneda(tot.realAnio)+'</td><td>'+mtdMoneda(tot.planAnio)+'</td></tr></tbody>';
-  document.getElementById('mtdTablaClientes').innerHTML=h}
-
-function mtdRenderKam(filas){
-  var g={};
-  filas.forEach(function(f){
-    var k=(f.kam||'').trim()||'Sin KAM';
-    if(!g[k])g[k]={kam:k,realMes:0,planMes:0};
-    g[k].realMes+=f.realMes||0;g[k].planMes+=f.planMes||0});
-  var lista=Object.keys(g).map(function(k){var x=g[k];
-    x.cumplPct=x.planMes?x.realMes/x.planMes:null;return x})
-    .sort(function(a,b){return b.realMes-a.realMes});
-  document.getElementById('mtdHintKam').innerText=lista.length+(lista.length===1?' KAM':' KAM')+' en la selección';
-  if(!lista.length){mtdVacio('mtdTablaKam','Sin datos por KAM');return}
-  var tr=lista.reduce(function(a,x){a.r+=x.realMes;a.p+=x.planMes;return a},{r:0,p:0});
-  var h='<thead><tr><th>KAM</th><th>Venta</th><th>Plan</th><th>% Cumpl</th></tr></thead><tbody>';
-  lista.forEach(function(x){
-    h+='<tr><td>'+esc(x.kam)+'</td><td>'+mtdMoneda(x.realMes)+'</td>'+
-       '<td>'+mtdMoneda(x.planMes)+'</td>'+mtdCeldaPct(x.cumplPct)+'</tr>'});
-  h+='<tr class="total"><td>TOTAL</td><td>'+mtdMoneda(tr.r)+'</td><td>'+mtdMoneda(tr.p)+'</td>'+
-     mtdCeldaPct(tr.p?tr.r/tr.p:null)+'</tr></tbody>';
-  document.getElementById('mtdTablaKam').innerHTML=h}
-
-// La hoja PLANTILLA no trae canal ni KAM, así que esta tabla no depende de los filtros.
-function mtdRenderProductos(){
-  var prods=(ventasMtdData.productos||[]).slice()
-    .sort(function(a,b){return(b.ventaMes||0)-(a.ventaMes||0)});
-  if(!prods.length){mtdVacio('mtdTablaProductos','Sin productos en la hoja PLANTILLA');return}
-  var tot=prods.reduce(function(a,p){
-    a.v+=p.ventaMes||0;a.a+=p.ventaMesAnterior||0;a.u+=p.unidades||0;return a},{v:0,a:0,u:0});
-  var h='<thead><tr><th>Producto</th><th>Venta</th><th>Venta -1</th>'+
-        '<th>Unidades</th><th>ΔV-1 %</th></tr></thead><tbody>';
-  prods.forEach(function(p){
-    h+='<tr><td>'+esc(p.nombre||'–')+'</td><td>'+mtdMoneda(p.ventaMes)+'</td>'+
-       '<td>'+mtdMoneda(p.ventaMesAnterior)+'</td>'+
-       '<td>'+FMT.format(Math.round(p.unidades||0))+'</td>'+
-       mtdDelta(p.deltaVsPctMesAnterior)+'</tr>'});
-  h+='<tr class="total"><td>TOTAL</td><td>'+mtdMoneda(tot.v)+'</td><td>'+mtdMoneda(tot.a)+'</td>'+
-     '<td>'+FMT.format(Math.round(tot.u))+'</td>'+
-     mtdDelta(tot.a?(tot.v-tot.a)/tot.a:null)+'</tr></tbody>';
-  document.getElementById('mtdTablaProductos').innerHTML=h}
-
-/* ── Datos de ejemplo para abrir el HTML fuera de Apps Script ── */
-function mtdDatosDemo(){
-  var filas=[
-    {sapId:'1001',cliente:'DROGUERÍAS CRUZ VERDE',kam:'Sara Cardona',canal:'Cadenas',
-     realMes:4200000000,realMesAnterior:3900000000,planMes:5100000000,cumplPct:null,
-     realAnio:32000000000,planAnio:41000000000},
-    {sapId:'1002',cliente:'FARMATODO',kam:'Manuel Camargo',canal:'Cadenas',
-     realMes:3100000000,realMesAnterior:3300000000,planMes:3200000000,cumplPct:null,
-     realAnio:24000000000,planAnio:25000000000},
-    {sapId:'1003',cliente:'BELLA PIEL',kam:'Sara Cardona',canal:'Independientes',
-     realMes:1800000000,realMesAnterior:1500000000,planMes:2600000000,cumplPct:null,
-     realAnio:14000000000,planAnio:20000000000}];
-  filas.forEach(function(f){f.cumplPct=f.planMes?f.realMes/f.planMes:null});
-  var prods=[
-    {nombre:'FP FUSION WATER MAGIC SPF50 50ML',ventaMes:2100000000,ventaMesAnterior:1700000000,unidades:52000},
-    {nombre:'ISDIN REPARADOR LABIAL STICK 4G',ventaMes:900000000,ventaMesAnterior:1050000000,unidades:31000},
-    {nombre:'ISDINCEUTICS MELACLEAR ADVANCE',ventaMes:640000000,ventaMesAnterior:640000000,unidades:4200}];
-  prods.forEach(function(p){p.deltaVsPctMesAnterior=p.ventaMesAnterior?
-    (p.ventaMes-p.ventaMesAnterior)/p.ventaMesAnterior:null});
-  var t=filas.reduce(function(a,f){a.realMes+=f.realMes;a.planMes+=f.planMes;
-    a.realAnio+=f.realAnio;a.planAnio+=f.planAnio;return a},
-    {realMes:0,planMes:0,realAnio:0,planAnio:0});
-  t.cumplPct=t.realMes/t.planMes;
-  return{cumplimiento:{filas:filas,totales:t},productos:prods,
-    meta:{actualizadoEn:new Date().toISOString(),totalFilasClientes:filas.length,
-      totalFilasProductos:prods.length}}}
-</script>
+<!-- ═══ Lógica (módulos) ══════════════════════════════════════════════ -->
+<?!= include('JsNucleo');  ?>
+<?!= include('JsFiltros'); ?>
+<?!= include('JsMapa');    ?>
+<?!= include('JsPaneles'); ?>
+<?!= include('JsVentasMtd'); ?>
+<script>iniciarUI();cargarDatos();</script>
 </body>
 </html>

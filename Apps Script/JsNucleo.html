@@ -1,0 +1,181 @@
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   NÚCLEO · configuración, estado global, formatos y carga de datos.
+   Todo el filtrado posterior ocurre EN MEMORIA sobre estos arreglos:
+   google.script.run solo se usa al arrancar (5 llamadas paralelas) y para
+   los detalles que se piden bajo demanda (portafolio, distribución de SKU,
+   conteo de SKUs). Tocar un filtro nunca vuelve al servidor.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Paletas (color con significado, nunca decorativo) ──────────────── */
+var SEM={alto:'#1e8e3e',medio:'#f2b600',bajo:'#ef7d00',muybajo:'#d03b3b',sin:'#9ca3af'};
+var CIUDADES={'BOGOTA':'#2a78d6','BOGOTÁ':'#2a78d6','MEDELLIN':'#008300','MEDELLÍN':'#008300',
+  'CALI':'#e87ba4','CARTAGENA':'#eda100','BARRANQUILLA':'#8b5cf6'};
+var FMT=new Intl.NumberFormat('es-CO');
+var MESN=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+/* ── Formato ────────────────────────────────────────────────────────── */
+function fc(v){var a=Math.abs(v);
+  if(a>=1e9)return'$ '+(v/1e9).toFixed(1)+' MM';
+  if(a>=1e6)return'$ '+(v/1e6).toFixed(1)+' M';
+  if(a>=1e3)return'$ '+(v/1e3).toFixed(0)+' K';
+  return'$ '+FMT.format(Math.round(v))}
+function fd(v){return'$ '+FMT.format(Math.round(v))}
+function em(m){var p=m.split('-');return MESN[Number(p[1])-1]+' '+p[0].slice(2)}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+/* MAYÚSCULAS y sin tildes: el buscador de los filtros ignora acentos. */
+function normTxt(s){return String(s==null?'':s).toUpperCase()
+  .normalize('NFD').replace(/\p{Diacritic}/gu,'')}
+
+/* ── Estado: datos crudos ───────────────────────────────────────────── */
+var puntosG=[],bricksG=[],ventasG={},productosG={},asignacionesG={};
+var mesesD=[],busD=[],idxSel={},conteoSkuG={};
+
+/* ── Estado: selección del usuario ──────────────────────────────────────
+   Cada dimensión es un ARREGLO (multi-selección). Arreglo vacío = sin
+   filtro. Entre dimensiones se cruza con AND; dentro de una dimensión,
+   los valores se combinan con OR. `sku` es la excepción: uno solo, porque
+   dispara una consulta de distribución al servidor.                      */
+var filtros={grupo:[],channel:[],region:[],poblacion:[],potencial:[],
+             agente:[],brick:[],pdv:[],bu:[],mes:[]};
+var fset={};                         /* espejo de `filtros` como mapas O(1) */
+var skuSel='',distSku=null,cargandoSku=false;
+var modoColor='rendimiento';
+
+var listo={puntos:false,bricks:false,ventas:false,port:false,asignaciones:false};
+var asignado=false;
+
+/* ── Utilidades de entorno ──────────────────────────────────────────── */
+function esGas(){return typeof google!=='undefined'&&google.script&&google.script.run}
+function me(e){return e&&e.message?e.message:String(e)}
+function avisar(m,g){var c=document.getElementById('avisos');c.style.display='flex';
+  var d=document.createElement('div');d.className='aviso'+(g?' grave':'');d.innerText=m;c.appendChild(d)}
+
+/* ══════════════ Carga de datos ══════════════════════════════════════ */
+function cargarDatos(){
+  if(!esGas()){setTimeout(cargarMock,250);return}
+  google.script.run.withSuccessHandler(function(j){recPuntos(JSON.parse(j))})
+    .withFailureHandler(function(e){avisar('PDV: '+me(e),true);listo.puntos=true;boot()}).getPuntosJson();
+  google.script.run.withSuccessHandler(function(j){recBricks(JSON.parse(j))})
+    .withFailureHandler(function(e){avisar('Bricks: '+me(e),true);listo.bricks=true;boot()}).getBricksJson();
+  google.script.run.withSuccessHandler(function(j){recVentas(JSON.parse(j))})
+    .withFailureHandler(function(e){avisar('Sell Out: '+me(e),true);listo.ventas=true;boot()}).getVentasJson();
+  google.script.run.withSuccessHandler(function(j){recPort(JSON.parse(j))})
+    .withFailureHandler(function(e){avisar('Portafolio: '+me(e));listo.port=true;boot()}).getPortafolioJson();
+  google.script.run.withSuccessHandler(function(j){recAsignaciones(JSON.parse(j))})
+    .withFailureHandler(function(e){avisar('Asignación: '+me(e));listo.asignaciones=true;boot()}).getAsignacionesJson();
+}
+
+function recPuntos(p){
+  puntosG=(p.puntos||[]).filter(function(x){return x.posId&&x.posId!=='0'});
+  listo.puntos=true;boot()}
+function recBricks(p){bricksG=p.bricks||[];listo.bricks=true;boot()}
+function recVentas(p){
+  mesesD=p.meses||[];var pdv=p.pdv||{};ventasG={};var bs={};
+  Object.keys(pdv).forEach(function(pos){var bus=pdv[pos].bu||{};ventasG[pos]=bus;
+    Object.keys(bus).forEach(function(b){bs[b]=1})});
+  busD=Object.keys(bs).sort();
+  // idxSel debe existir antes de marcar ventas como listas y antes de boot().
+  aplicarPreset('TODOS',true);
+  // Si el portafolio llegó primero, se revalida el SKU con los meses ya definidos.
+  if(listo.port)validarSku();
+  listo.ventas=true;boot()}
+// so_portafolio.json del ETL: {meses, sku:{SKU:{desc,familia,bu,serie}}}.
+// Se normaliza al formato interno {d,bu,f,s}; también acepta {productos:{d,bu,f,s}}.
+function recPort(p){
+  var src=p.productos||p.sku||{};productosG={};
+  Object.keys(src).forEach(function(k){var x=src[k]||{};
+    productosG[k]={d:x.d||x.desc||k,bu:String(x.bu||'').trim().toUpperCase(),
+      f:x.f||x.familia||'',s:x.s||x.serie||[]}});
+  validarSku();listo.port=true;boot()}
+function recAsignaciones(p){asignacionesG=p.pdv||{};listo.asignaciones=true;boot()}
+
+function boot(){
+  actOverlay();
+  if(listo.bricks&&listo.puntos&&!asignado){
+    asignarBricks();dibujarBricks();asignado=true;
+    if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
+  if(listo.puntos)actualizar();
+  // El portafolio depende de idxSel (definido en recVentas): esperar ambos.
+  if(listo.port&&listo.ventas)dibujarPort()}
+
+function actOverlay(){
+  var o=document.getElementById('overlay');
+  if(listo.puntos&&listo.bricks&&listo.ventas&&listo.port&&listo.asignaciones){o.style.display='none';return}
+  var f=[];if(!listo.puntos)f.push('PDV');if(!listo.bricks)f.push('bricks');
+  if(!listo.ventas)f.push('Sell Out');if(!listo.port)f.push('portafolio');
+  if(!listo.asignaciones)f.push('asignación');
+  document.getElementById('overlayTexto').innerText='Cargando '+f.join(', ')+'…'}
+
+/* ── Diagnóstico ────────────────────────────────────────────────────── */
+function abrirDiag(){document.getElementById('modalDiag').style.display='flex';
+  var p=document.getElementById('diagTexto');
+  if(!esGas()){p.innerText='Solo disponible dentro de Apps Script.';return}
+  p.innerText='Consultando…';
+  google.script.run.withSuccessHandler(function(j){p.innerText=JSON.stringify(JSON.parse(j),null,2)})
+    .withFailureHandler(function(e){p.innerText='Error: '+me(e)}).getDiagnosticoJson()}
+function cerrarDiag(){document.getElementById('modalDiag').style.display='none'}
+
+/* ══════════════ Datos de prueba (solo fuera de Apps Script) ══════════
+   Index.html abierto directo en el navegador entra aquí: permite revisar
+   el layout y la densidad del mapa sin desplegar. Generador determinista
+   (LCG) para que dos capturas seguidas sean idénticas.                  */
+function cargarMock(){
+  var sem=42;function rnd(){sem=(sem*1103515245+12345)%2147483648;return sem/2147483648}
+  var CIUS=[{c:'BOGOTA',dep:'BOGOTA D.C.',lat:4.66,lng:-74.08,pre:'BOG',n:150},
+            {c:'MEDELLIN',dep:'ANTIOQUIA',lat:6.25,lng:-75.57,pre:'MED',n:90},
+            {c:'CALI',dep:'VALLE DEL CAUCA',lat:3.44,lng:-76.52,pre:'CAL',n:70},
+            {c:'CARTAGENA',dep:'BOLIVAR',lat:10.40,lng:-75.50,pre:'CTG',n:50}];
+  var GRUPOS=['BELLA PIEL','LA REBAJA','CRUZ VERDE','FARMATODO','COPIDROGAS','INDEPENDIENTE'];
+  var CANALES=['Ph Independents','Corporations','Chains','Dermo'];
+  var POTS=['AA','A','B','C'];
+  var AGS=[{delegado:'Ana Pérez',tipo:'VM'},{delegado:'Luis Gómez',tipo:'LAM'},
+           {delegado:'Marta Ruiz',tipo:'VM'},{delegado:'Jorge Díaz',tipo:'LAM'}];
+  var BUS=['FOTO','DERMA','CORPORAL'];
+  var meses=[];for(var m=1;m<=9;m++)meses.push('2026-'+(m<10?'0':'')+m);
+  var puntos=[],bricks=[],ventas={},asig={},k=0;
+
+  CIUS.forEach(function(ci){
+    for(var gx=0;gx<2;gx++)for(var gy=0;gy<2;gy++){
+      var x0=ci.lng-0.06+gx*0.06,y0=ci.lat-0.06+gy*0.06;
+      var id=ci.pre+'-'+(gx*2+gy+1);
+      bricks.push({brickId:id,nombre:'ZONA '+(gx*2+gy+1),zona:ci.c,ciudad:ci.c,
+        departamento:ci.dep,nombreBrick:ci.c+', ZONA '+(gx*2+gy+1),
+        geometry:{type:'Polygon',coordinates:[[[x0,y0],[x0+0.06,y0],[x0+0.06,y0+0.06],
+          [x0,y0+0.06],[x0,y0]]]}});
+    }
+    for(var i=0;i<ci.n;i++){
+      k++;var pos='MOCK'+k;
+      var lat=ci.lat-0.06+rnd()*0.12,lng=ci.lng-0.06+rnd()*0.12;
+      puntos.push({id:'A'+k,idSap:rnd()<0.55?'SAP-'+k:'',posId:pos,
+        name:GRUPOS[(k*7)%GRUPOS.length]+' '+ci.c.slice(0,3)+' '+(i+1),
+        lat:lat,lng:lng,grupo:GRUPOS[(k*7)%GRUPOS.length],channel:CANALES[k%CANALES.length],
+        region:ci.dep,poblacion:ci.c,potencial:POTS[Math.floor(rnd()*4)],
+        afinidad:'',direccion:'Cl '+(10+k%90)+' # '+(1+k%40),brickCrm:''});
+      if(rnd()<0.62){var a=AGS[Math.floor(rnd()*AGS.length)];
+        asig[pos]=[{delegado:a.delegado,team:ci.c,tipo:a.tipo,cuentaId:'',cuentaNombre:''}]}
+      if(rnd()<0.8){var bu={};
+        BUS.forEach(function(b){if(rnd()<0.6)return;var s=[];
+          meses.forEach(function(mm,mi){if(rnd()<0.25)return;
+            var u=Math.round(2+rnd()*60);s.push([mi,u,Math.round(u*(38000+rnd()*45000))])});
+          if(s.length)bu[b]=s});
+        if(Object.keys(bu).length)ventas[pos]={bu:bu}}
+    }
+  });
+
+  var prods={};
+  ['FP GEL CREAM SPF50 250ML','FP FUSION WATER SPF50','FP COMPACT ARENA SPF50+ 10G',
+   'FOTOULTRA AGE REPAIR','ISDINCEUTICS FLAVO-C','GERMISDIN HIGIENE','UREADIN 10 LOCION',
+   'NUTRADEICA CHAMPU','FOTOPROTECTOR PEDIATRICS','ISDINCEUTICS MELACLEAR'].forEach(function(d,i){
+    var s=[];meses.forEach(function(mm,mi){var u=Math.round(80+rnd()*900);
+      s.push([mi,u,Math.round(u*(40000+rnd()*30000))])});
+    prods['84294202519'+(10+i)]={d:d,bu:BUS[i%BUS.length],f:'',s:s}});
+
+  recPuntos({puntos:puntos});
+  recBricks({bricks:bricks});
+  recVentas({meses:meses,pdv:ventas});
+  recPort({productos:prods});
+  recAsignaciones({pdv:asig});
+}
+</script>

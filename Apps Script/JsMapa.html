@@ -1,0 +1,245 @@
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   MAPA · Leaflet: capa de bricks (polígonos) + capa de PDV (círculos).
+   Nada aquí consulta al servidor: todo se dibuja desde los arreglos en
+   memoria que dejó JsNucleo y del universo que filtró JsFiltros.
+   ══════════════════════════════════════════════════════════════════════ */
+
+var map=null,lienzo=null,bLayer=null,pLayer=null,capaBase=null;
+var capaBrick={},agBricks={},agConectado={},agAsignPorBrick={};
+var marcIdx={},pdvIdx={},bbBricks=null,bbVis=null,geomB=[];
+
+function crearMapa(){
+  map=L.map('map',{preferCanvas:true,zoomControl:true}).setView([4.5709,-74.2973],6);
+  // Base OpenStreetMap. NO cambiar a CARTO (Voyager/Positron): desde 2024 sus
+  // teselas raster exigen API key y devuelven la imagen con "API KEY REQUIRED"
+  // estampada encima — no fallan, así que ni siquiera se puede detectar por error.
+  capaBase=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  lienzo=L.canvas({padding:.4});
+  bLayer=L.featureGroup().addTo(map);
+  pLayer=L.layerGroup().addTo(map);
+  observarTamano();
+}
+
+/* Leaflet cachea el tamaño del contenedor al construirse y no se entera de los
+   cambios de layout posteriores. Aquí hay dos: la cabecera se encoge cuando
+   Choices.js transforma los <select>, y otra vez cuando llega su CSS por CDN
+   (hasta ese momento los desplegables ocupan alto y el mapa se queda en 60 px).
+   Por eso el reencuadre se dispara ante cualquier cambio REAL de tamaño, no
+   una sola vez: si no, el mapa queda con un zoom calculado sobre una franja. */
+var tamMapa='',pendTam=null;
+function observarTamano(){
+  var cont=document.querySelector('.mapa-wrap');if(!cont)return;
+  var ajustar=function(){
+    clearTimeout(pendTam);
+    pendTam=setTimeout(function(){
+      if(!map)return;
+      var t=cont.clientWidth+'x'+cont.clientHeight;
+      if(t===tamMapa)return;
+      tamMapa=t;map.invalidateSize();reencuadrar()},120)};
+  if(window.ResizeObserver)new ResizeObserver(ajustar).observe(cont);
+  window.addEventListener('resize',ajustar);
+  ajustar()}
+
+/* Reencuadra respetando la casilla "Auto-zoom": si el usuario la apagó, el
+   mapa no se le mueve solo. */
+function reencuadrar(){
+  if(!map)return;
+  var auto=document.getElementById('togZoom');
+  if(auto&&!auto.checked)return;
+  if(bbVis&&bbVis.isValid())map.fitBounds(bbVis,{padding:[40,40],maxZoom:15});
+  else if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
+
+function centrarBricks(){if(bbBricks&&bbBricks.isValid())map.fitBounds(bbBricks,{padding:[30,30]})}
+function cambiarModo(v){modoColor=v;recolorBricks()}
+function alternarBricks(){
+  if(document.getElementById('togBricks').checked){map.addLayer(bLayer);bLayer.bringToBack()}
+  else map.removeLayer(bLayer)}
+
+/* ══════════════ Escalas de color ════════════════════════════════════ */
+/* Cuartiles sobre los valores positivos: el color codifica alto/medio/bajo,
+   nunca es decorativo (regla Zebra BI de este dashboard).                */
+function crearEscala(vals){
+  var pos=vals.filter(function(v){return v>0}).sort(function(a,b){return a-b});
+  if(!pos.length)return function(){return SEM.sin};
+  function q(p){return pos[Math.min(pos.length-1,Math.floor(p*pos.length))]}
+  var t1=q(.25),t2=q(.5),t3=q(.75);
+  return function(v){if(!v||v<=0)return SEM.sin;
+    if(v<=t1)return SEM.muybajo;if(v<=t2)return SEM.bajo;
+    if(v<=t3)return SEM.medio;return SEM.alto}}
+function colorCiudad(c){return CIUDADES[(c||'').toUpperCase().trim()]||'#9ca3af'}
+
+/* ══════════════ PDV → brick (punto en polígono, en el cliente) ══════ */
+function asignarBricks(){
+  var ids={};geomB=[];
+  bricksG.forEach(function(b){ids[b.brickId.toUpperCase()]=b.brickId;
+    if(!b.geometry)return;
+    var polys=b.geometry.type==='Polygon'?[b.geometry.coordinates]:b.geometry.coordinates;
+    if(!polys.length)return;
+    var mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];
+    polys.forEach(function(p){(p[0]||[]).forEach(function(c){
+      if(c[0]<mn[0])mn[0]=c[0];if(c[0]>mx[0])mx[0]=c[0];
+      if(c[1]<mn[1])mn[1]=c[1];if(c[1]>mx[1])mx[1]=c[1]})});
+    geomB.push({id:b.brickId,polys:polys,bb:[mn[0],mn[1],mx[0],mx[1]]})});
+  puntosG.forEach(function(p){var crm=(p.brickCrm||'').toUpperCase();
+    if(crm&&ids[crm]){p._brick=ids[crm];return}p._brick=pip(p.lng,p.lat)})}
+
+function pip(x,y){for(var i=0;i<geomB.length;i++){var g=geomB[i],bb=g.bb;
+  if(x<bb[0]||x>bb[2]||y<bb[1]||y>bb[3])continue;
+  for(var j=0;j<g.polys.length;j++){var po=g.polys[j];
+    if(!ring(x,y,po[0]))continue;var h=false;
+    for(var k=1;k<po.length;k++)if(ring(x,y,po[k])){h=true;break}
+    if(!h)return g.id}}return''}
+function ring(x,y,r){var ins=false;
+  for(var i=0,j=r.length-1;i<r.length;j=i++){
+    var xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];
+    if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}return ins}
+
+/* ══════════════ Capa de bricks ══════════════════════════════════════ */
+function dibujarBricks(){
+  bLayer.clearLayers();capaBrick={};bbBricks=L.latLngBounds([]);
+  bricksG.forEach(function(b){if(!b.geometry)return;
+    try{
+      var capa=L.geoJSON(b.geometry,{renderer:lienzo,
+        style:{color:SEM.sin,weight:2,opacity:.9,fillColor:SEM.sin,fillOpacity:.18}});
+      // Sin popup: el clic filtra el mapa a ese brick y abre su pestaña en el
+      // panel derecho — el detalle se lee en la tabla, no sobre el mapa.
+      capa.on('click',function(){aplicarFiltroBrick(b.brickId)});
+      capa.addTo(bLayer);capaBrick[b.brickId]=capa;bbBricks.extend(capa.getBounds())
+    }catch(e){}});
+  bLayer.bringToBack()}
+
+function recolorBricks(){
+  var escala,porCiudad={},selB=fset.brick;
+  function pinta(b,valor,opBase){
+    var c=capaBrick[b.brickId];if(!c)return;
+    var col=modoColor==='ciudad'?colorCiudad(b.ciudad):escala(valor);
+    if(modoColor==='ciudad')porCiudad[(b.ciudad||'SIN CIUDAD').toUpperCase()]=col;
+    // Selección: el brick elegido se resalta con grosor, no con otro color.
+    var elegido=selB?!!selB[b.brickId]:false;
+    var apagado=selB&&!elegido;
+    c.setStyle({color:col,fillColor:col,
+      fillOpacity:apagado?.06:(valor>0?opBase:.12),
+      weight:elegido?3.5:2,opacity:apagado?.35:.9})}
+
+  if(skuSel&&distSku){
+    var agSku={};
+    visibles().forEach(function(p){if(!p._brick)return;
+      agSku[p._brick]=(agSku[p._brick]||0)+ventaSku(p).total});
+    escala=crearEscala(Object.keys(agSku).map(function(k){return agSku[k]}));
+    bricksG.forEach(function(b){pinta(b,agSku[b.brickId]||0,.35)});
+  }else if(modoColor==='conectado'){
+    escala=crearEscala(Object.keys(agConectado).map(function(k){return agConectado[k]}));
+    bricksG.forEach(function(b){pinta(b,agConectado[b.brickId]||0,.35)});
+  }else if(modoColor==='asignado'){
+    var pct={};Object.keys(agAsignPorBrick).forEach(function(id){var a=agAsignPorBrick[id];
+      pct[id]=a.total>0?100*a.asignados/a.total:0});
+    escala=crearEscala(Object.keys(pct).map(function(k){return pct[k]}));
+    bricksG.forEach(function(b){pinta(b,pct[b.brickId]||0,.35)});
+  }else{
+    escala=crearEscala(Object.keys(agBricks).map(function(id){return agBricks[id].total}));
+    bricksG.forEach(function(b){var agg=agBricks[b.brickId];
+      pinta(b,agg?agg.total:0,modoColor==='ciudad'?.20:.35)});
+  }
+  renderLey(porCiudad)}
+
+function renderLey(pc){
+  var c=document.getElementById('leyBricks');if(!c)return;
+  var filas;
+  if(modoColor==='ciudad'){
+    filas=Object.keys(pc).sort().map(function(k){return[pc[k],k]});
+  }else{
+    var etqSin=skuSel?'Sin este producto':
+      modoColor==='conectado'?'Sin Sell Out conectado':
+      modoColor==='asignado'?'Sin PDV asignados':'Sin ventas';
+    var etqAlto=modoColor==='asignado'?'Alta cobertura':'Alto';
+    var etqBajo=modoColor==='asignado'?'Baja cobertura':'Muy bajo';
+    filas=[[SEM.alto,etqAlto],[SEM.medio,'Medio'],[SEM.bajo,'Bajo'],
+           [SEM.muybajo,etqBajo],[SEM.sin,etqSin]];
+  }
+  var h='';
+  filas.forEach(function(f){
+    h+='<span class="item"><span class="swatch" style="background:'+f[0]+'"></span>'+esc(f[1])+'</span>'});
+  c.innerHTML=h}
+
+/* ══════════════ Capa de PDV ═════════════════════════════════════════ */
+/* El radio es ∝ raíz de la venta: así el ÁREA representa la magnitud y los
+   puntos grandes no dominan de más.                                      */
+function dibujarPuntos(vis,vv){
+  pLayer.clearLayers();marcIdx={};pdvIdx={};if(!vis.length)return;
+  var verSin=document.getElementById('togSinProd').checked;
+  var modoProd=!!(skuSel&&distSku);
+  var valores=modoProd?vis.map(function(p){return ventaSku(p).total})
+                      :vv.map(function(v){return v.total});
+  var escala=crearEscala(valores);
+  var mx=valores.reduce(function(m,v){return Math.max(m,v)},0);
+  var bb=L.latLngBounds([]);
+
+  vis.forEach(function(p,i){
+    var val=valores[i];
+    if(modoProd&&val<=0&&!verSin)return;
+    var col=escala(val),r=5;
+    if(mx>0&&val>0)r=5+11*Math.sqrt(val/mx);
+    if(modoProd&&val<=0)r=3.5;
+    var mk=L.circleMarker([p.lat,p.lng],{renderer:lienzo,radius:r,
+      color:'#fff',weight:1,fillColor:col,fillOpacity:(modoProd&&val<=0)?.45:.9});
+    mk.bindPopup(function(){return popupPdv(p,i)},{maxWidth:300});
+    mk.addTo(pLayer);marcIdx[i]=mk;pdvIdx[i]=p;bb.extend([p.lat,p.lng])});
+
+  bbVis=bb.isValid()?bb:null;
+  if(document.getElementById('togZoom').checked&&bb.isValid())
+    map.fitBounds(bb,{padding:[40,40],maxZoom:15})}
+
+function irAlPdv(p,i){
+  map.setView([p.lat,p.lng],16);
+  var m=marcIdx[i];if(m)m.openPopup()}
+
+function popupPdv(p,i){
+  var v=ventaPDV(p),nm=Object.keys(idxSel).length;
+  var h='<div class="popup-pdv"><h3>'+esc(p.name)+
+    '<span class="badge-pot">'+esc(p.potencial)+'</span>'+marcaAgenteHtml(p)+'</h3>';
+
+  if(skuSel&&distSku){
+    var meta=productosG[skuSel]||{d:skuSel},s=ventaSku(p);
+    var precio=s.unidades>0?s.total/s.unidades:0;
+    var rot=(nm>0&&s.unidades>0)?s.unidades/nm:0;
+    if(s.total>0){
+      h+='<div class="popup-sellout prod">'+
+        '<span class="grande">'+fd(s.total)+'</span><br>'+
+        '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
+        '<b>Unidades:</b> '+FMT.format(Math.round(s.unidades))+'<br>'+
+        '<b>Rotación:</b> '+rot.toFixed(1)+' und./mes<br>'+
+        '<b>Precio prom.:</b> '+fd(precio)+'<br>'+
+        '<b>Meses con venta:</b> '+s.mesesConDato+' de '+nm+'</div>';
+    }else{
+      h+='<div class="popup-sellout prod"><b>NO vende este producto</b><br>'+
+        '<span class="mini">'+esc(meta.d||skuSel)+'</span><br>'+
+        'Sell Out total del PDV: '+fd(v.total)+'</div>'}
+  }else if(ventasG[p.posId]){
+    h+='<div class="popup-sellout"><span class="grande">'+fd(v.promedio)+'</span> / mes<br>'+
+      '<span class="mini">Promedio sobre '+nm+(nm===1?' mes':' meses')+
+      (filtros.bu.length?' · '+esc(filtros.bu.join(', ')):'')+'</span><br>'+
+      '<b>Total período:</b> '+fd(v.total)+'<br>'+
+      '<b>Unidades:</b> '+FMT.format(Math.round(v.unidades))+'</div>';
+    var bus=ventasG[p.posId];
+    var lista=Object.keys(bus).map(function(b){return{b:b,a:sumarSerie(bus[b]).total}})
+      .filter(function(x){return x.a>0}).sort(function(x,y){return y.a-x.a});
+    if(lista.length)h+='<b>Por BU:</b> '+lista.slice(0,4)
+      .map(function(x){return esc(x.b)+' '+fc(x.a)}).join(' · ')+'<br>';
+    h+='<button class="btn-portafolio" onclick="verPortPdv(pdvIdx['+i+'])">'+
+      'Ver portafolio (producto a producto)</button>'
+  }else h+='<div class="popup-sellout"><span class="mini">Sin Sell Out en el período</span></div>';
+
+  h+=(p.posId?'<b>POS ID:</b> '+esc(p.posId)+'<br>':'')+
+    '<b>Dirección:</b> '+esc(p.direccion)+'<br>'+
+    '<b>Cliente:</b> '+esc(p.grupo)+'<br>'+
+    '<b>Canal:</b> '+esc(p.channel)+'<br>'+
+    '<b>Departamento:</b> '+esc(p.region)+' · <b>Ciudad:</b> '+esc(p.poblacion)+'<br>'+
+    (p._brick?'<b>Brick:</b> '+esc(p._brick)+'<br>':'')+
+    (tieneAgente(p)?'<b>Agente:</b> '+esc(asignacionesDe(p).map(function(a){
+      return a.delegado+(a.tipo?' ('+a.tipo+')':'')}).join(', '))+'<br>':'')+
+    '<a class="enlace" href="https://www.google.com/maps?q='+p.lat+','+p.lng+
+    '" target="_blank" rel="noopener">Abrir en Google Maps</a></div>';
+  return h}
+</script>

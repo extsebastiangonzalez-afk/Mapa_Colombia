@@ -1,0 +1,231 @@
+<script>
+/* ══════════ JsVentasMtd · pestaña "Ventas MTD" ══════════
+   Estado propio (ventasMtdData) y funciones con prefijo mtd. Depende solo de
+   cinco utilidades de JsNucleo: FMT, esc, normTxt, esGas y me.
+   ═══════════════════════════════════════════════════════════════ */
+
+let ventasMtdData=null;
+var mtdCargando=false;
+var MTD_MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+var MTD_COP=new Intl.NumberFormat('es-CO',
+  {style:'currency',currency:'COP',minimumFractionDigits:0,maximumFractionDigits:0});
+// Semáforo de cumplimiento: [mínimo, color del texto, fondo de la celda]
+var MTD_SEM=[[1,'#28a745','rgba(40,167,69,.15)'],[.85,'#ffc107','rgba(255,193,7,.15)'],
+             [.70,'#fd7e14','rgba(253,126,20,.15)'],[-Infinity,'#dc3545','rgba(220,53,69,.15)']];
+
+function mtdMoneda(v){return MTD_COP.format(Math.round(v||0))}
+function mtdPctTxt(v){return(v==null||!isFinite(v))?'–':
+  v.toLocaleString('es-CO',{style:'percent',minimumFractionDigits:1})}
+function mtdMillones(v){return(( v||0)/1e6).toLocaleString('es-CO',{maximumFractionDigits:0})+' M'}
+function mtdSem(v){var p=(v==null||!isFinite(v))?-Infinity:v;
+  for(var i=0;i<MTD_SEM.length;i++)if(p>=MTD_SEM[i][0])return MTD_SEM[i];
+  return MTD_SEM[MTD_SEM.length-1]}
+function mtdCeldaPct(v){var s=mtdSem(v);
+  return'<td class="celda-pct" style="color:'+s[1]+';background:'+s[2]+'">'+mtdPctTxt(v)+'</td>'}
+function mtdDelta(v){if(v==null||!isFinite(v))return'<td>–</td>';
+  return'<td class="'+(v>=0?'pos':'neg')+'">'+(v>0?'+':'')+mtdPctTxt(v)+'</td>'}
+
+/* ── Vistas de nivel superior: mapa ↔ Ventas MTD ──
+   Convive con verVista() de JsPaneles, que conmuta las pestañas internas del
+   rail (Tabla/Análisis/Brick): son niveles distintos y no se pisan. */
+var mtdVistaActiva='mapa';
+function mostrarVistaSuperior(v){
+  mtdVistaActiva=v;
+  var esMtd=(v==='ventasmtd');
+  document.getElementById('vistaMapa').hidden=esMtd;
+  document.getElementById('vistaVentasMtd').hidden=!esMtd;
+  document.getElementById('btnVistaMapa').classList.toggle('activo',!esMtd);
+  document.getElementById('btnVistaVentasMtd').classList.toggle('activo',esMtd);
+  // La barra de filtros de la cabecera es del visor (período, BU, SKU, canal…):
+  // no aplica al informe MTD, que tiene sus propios filtros.
+  var bf=document.getElementById('barraFiltros');
+  if(bf)bf.hidden=esMtd;
+  if(!esMtd){
+    // Leaflet mide mal el contenedor si estuvo oculto: hay que recalcular al volver.
+    setTimeout(function(){
+      if(typeof map!=='undefined'&&map&&typeof map.invalidateSize==='function')
+        map.invalidateSize()},60);
+    return}
+  // Carga perezosa: solo la primera vez que se entra a la pestaña.
+  if(ventasMtdData===null&&!mtdCargando)cargarVentasMtd()}
+
+/* ── Carga (perezosa: solo al entrar a la pestaña) ── */
+function cargarVentasMtd(forzar){
+  if(mtdCargando)return;
+  if(forzar)ventasMtdData=null;
+  mtdCargando=true;
+  document.getElementById('mtdContenido').style.display='none';
+  var est=document.getElementById('mtdEstado');
+  est.style.display='block';
+  est.innerHTML='<span class="mtd-spinner"></span>Cargando datos…';
+  if(!esGas()){setTimeout(function(){onVentasMtdCargado(mtdDatosDemo())},300);return}
+  google.script.run
+    .withSuccessHandler(function(j){
+      try{onVentasMtdCargado(JSON.parse(j))}
+      catch(e){mtdCargando=false;est.innerText='No pude leer la respuesta: '+me(e)}})
+    .withFailureHandler(function(e){
+      mtdCargando=false;
+      est.innerHTML='<b>No pude cargar Ventas MTD.</b><br>'+esc(me(e))+
+        '<br><span class="mini">Revisa las hojas CUMPLIMIENTO y PLANTILLA del archivo de Ventas MTD.</span>'})
+    .getVentasMtdJson()}
+
+function onVentasMtdCargado(data){
+  mtdCargando=false;
+  ventasMtdData=data||{cumplimiento:{filas:[],totales:null},productos:[],meta:{}};
+  var d=new Date();
+  document.getElementById('mtdSubtitulo').innerText=MTD_MESES[d.getMonth()]+' '+d.getFullYear();
+  var meta=ventasMtdData.meta||{};
+  document.getElementById('mtdActualizado').innerText=
+    meta.actualizadoEn?('Datos: '+new Date(meta.actualizadoEn).toLocaleString('es-CO')):'';
+  mtdLlenarSelects();
+  document.getElementById('mtdEstado').style.display='none';
+  document.getElementById('mtdContenido').style.display='block';
+  renderVentasMtd()}
+
+/* ── Filtros ── */
+function mtdLlenarSelects(){
+  var filas=(ventasMtdData.cumplimiento||{}).filas||[];
+  [['mtdCanal','canal','Todos los canales'],['mtdKam','kam','Todos los KAM']]
+    .forEach(function(cfg){
+      var sel=document.getElementById(cfg[0]),prev=sel.value||'TODOS',vals={};
+      filas.forEach(function(f){var v=(f[cfg[1]]||'').trim();if(v)vals[v]=1});
+      var html='<option value="TODOS">'+cfg[2]+'</option>';
+      Object.keys(vals).sort().forEach(function(v){
+        html+='<option value="'+esc(v)+'">'+esc(v)+'</option>'});
+      sel.innerHTML=html;sel.value=prev;if(sel.selectedIndex<0)sel.value='TODOS'})}
+
+function mtdLimpiarFiltros(){
+  document.getElementById('mtdCanal').value='TODOS';
+  document.getElementById('mtdKam').value='TODOS';
+  document.getElementById('mtdCliente').value='';
+  renderVentasMtd()}
+
+function mtdFilasFiltradas(){
+  var filas=(ventasMtdData.cumplimiento||{}).filas||[];
+  var canal=document.getElementById('mtdCanal').value||'TODOS';
+  var kam=document.getElementById('mtdKam').value||'TODOS';
+  var q=normTxt(document.getElementById('mtdCliente').value||'');
+  return filas.filter(function(f){
+    if(canal!=='TODOS'&&(f.canal||'')!==canal)return false;
+    if(kam!=='TODOS'&&(f.kam||'')!==kam)return false;
+    if(q&&normTxt(f.cliente).indexOf(q)===-1)return false;
+    return true})}
+
+/* ── Render ── */
+function renderVentasMtd(){
+  if(!ventasMtdData)return;
+  var filas=mtdFilasFiltradas();
+  var tot=filas.reduce(function(a,f){
+    a.realMes+=f.realMes||0;a.planMes+=f.planMes||0;
+    a.realAnio+=f.realAnio||0;a.planAnio+=f.planAnio||0;return a},
+    {realMes:0,planMes:0,realAnio:0,planAnio:0});
+  tot.cumplPct=tot.planMes?tot.realMes/tot.planMes:null;
+  mtdRenderKpi(tot,filas.length);
+  mtdRenderClientes(filas,tot);
+  mtdRenderKam(filas);
+  mtdRenderProductos()}
+
+function mtdRenderKpi(tot,nFilas){
+  var sem=mtdSem(tot.cumplPct);
+  document.getElementById('mtdKpiVenta').innerText=mtdMillones(tot.realMes);
+  document.getElementById('mtdKpiVentaDet').innerText=
+    mtdMoneda(tot.realMes)+' · vs Plan '+mtdMoneda(tot.planMes);
+  var pct=document.getElementById('mtdKpiPct');
+  pct.innerText=mtdPctTxt(tot.cumplPct);pct.style.color=sem[1];
+  document.getElementById('mtdKpiPctDet').innerText=
+    nFilas+(nFilas===1?' cliente':' clientes')+' en la selección';
+  document.getElementById('mtdKpiAnio').innerText=mtdMillones(tot.realAnio);
+  document.getElementById('mtdKpiAnioDet').innerText=
+    'Plan año '+mtdMoneda(tot.planAnio)+
+    (tot.planAnio?' · '+mtdPctTxt(tot.realAnio/tot.planAnio):'');
+  var barra=document.getElementById('mtdKpiBarra');
+  var p=(tot.cumplPct==null||!isFinite(tot.cumplPct))?0:Math.max(0,Math.min(100,tot.cumplPct*100));
+  barra.style.width=p+'%';barra.style.background=sem[1]}
+
+function mtdVacio(tabla,msg){
+  document.getElementById(tabla).innerHTML=
+    '<tbody><tr><td class="mtd-vacio">'+esc(msg)+'</td></tr></tbody>'}
+
+function mtdRenderClientes(filas,tot){
+  document.getElementById('mtdHintClientes').innerText=
+    filas.length+' de '+((ventasMtdData.cumplimiento||{}).filas||[]).length+' clientes · ordenado por venta del mes';
+  if(!filas.length){mtdVacio('mtdTablaClientes','Sin clientes con los filtros actuales');return}
+  var orden=filas.slice().sort(function(a,b){return(b.realMes||0)-(a.realMes||0)});
+  var h='<thead><tr><th>Cliente</th><th>Canal</th><th>KAM</th><th>Venta Mes</th>'+
+        '<th>Plan Mes</th><th>% Cumpl</th><th>Venta Año</th><th>Plan Año</th></tr></thead><tbody>';
+  orden.forEach(function(f){
+    h+='<tr><td>'+esc(f.cliente||f.sapId||'–')+'</td><td>'+esc(f.canal||'–')+'</td>'+
+       '<td>'+esc(f.kam||'–')+'</td><td>'+mtdMoneda(f.realMes)+'</td>'+
+       '<td>'+mtdMoneda(f.planMes)+'</td>'+mtdCeldaPct(f.cumplPct)+
+       '<td>'+mtdMoneda(f.realAnio)+'</td><td>'+mtdMoneda(f.planAnio)+'</td></tr>'});
+  h+='<tr class="total"><td>TOTAL</td><td></td><td></td><td>'+mtdMoneda(tot.realMes)+'</td>'+
+     '<td>'+mtdMoneda(tot.planMes)+'</td>'+mtdCeldaPct(tot.cumplPct)+
+     '<td>'+mtdMoneda(tot.realAnio)+'</td><td>'+mtdMoneda(tot.planAnio)+'</td></tr></tbody>';
+  document.getElementById('mtdTablaClientes').innerHTML=h}
+
+function mtdRenderKam(filas){
+  var g={};
+  filas.forEach(function(f){
+    var k=(f.kam||'').trim()||'Sin KAM';
+    if(!g[k])g[k]={kam:k,realMes:0,planMes:0};
+    g[k].realMes+=f.realMes||0;g[k].planMes+=f.planMes||0});
+  var lista=Object.keys(g).map(function(k){var x=g[k];
+    x.cumplPct=x.planMes?x.realMes/x.planMes:null;return x})
+    .sort(function(a,b){return b.realMes-a.realMes});
+  document.getElementById('mtdHintKam').innerText=lista.length+(lista.length===1?' KAM':' KAM')+' en la selección';
+  if(!lista.length){mtdVacio('mtdTablaKam','Sin datos por KAM');return}
+  var tr=lista.reduce(function(a,x){a.r+=x.realMes;a.p+=x.planMes;return a},{r:0,p:0});
+  var h='<thead><tr><th>KAM</th><th>Venta</th><th>Plan</th><th>% Cumpl</th></tr></thead><tbody>';
+  lista.forEach(function(x){
+    h+='<tr><td>'+esc(x.kam)+'</td><td>'+mtdMoneda(x.realMes)+'</td>'+
+       '<td>'+mtdMoneda(x.planMes)+'</td>'+mtdCeldaPct(x.cumplPct)+'</tr>'});
+  h+='<tr class="total"><td>TOTAL</td><td>'+mtdMoneda(tr.r)+'</td><td>'+mtdMoneda(tr.p)+'</td>'+
+     mtdCeldaPct(tr.p?tr.r/tr.p:null)+'</tr></tbody>';
+  document.getElementById('mtdTablaKam').innerHTML=h}
+
+// La hoja PLANTILLA no trae canal ni KAM, así que esta tabla no depende de los filtros.
+function mtdRenderProductos(){
+  var prods=(ventasMtdData.productos||[]).slice()
+    .sort(function(a,b){return(b.ventaMes||0)-(a.ventaMes||0)});
+  if(!prods.length){mtdVacio('mtdTablaProductos','Sin productos en la hoja PLANTILLA');return}
+  var tot=prods.reduce(function(a,p){
+    a.v+=p.ventaMes||0;a.a+=p.ventaMesAnterior||0;a.u+=p.unidades||0;return a},{v:0,a:0,u:0});
+  var h='<thead><tr><th>Producto</th><th>Venta</th><th>Venta -1</th>'+
+        '<th>Unidades</th><th>ΔV-1 %</th></tr></thead><tbody>';
+  prods.forEach(function(p){
+    h+='<tr><td>'+esc(p.nombre||'–')+'</td><td>'+mtdMoneda(p.ventaMes)+'</td>'+
+       '<td>'+mtdMoneda(p.ventaMesAnterior)+'</td>'+
+       '<td>'+FMT.format(Math.round(p.unidades||0))+'</td>'+
+       mtdDelta(p.deltaVsPctMesAnterior)+'</tr>'});
+  h+='<tr class="total"><td>TOTAL</td><td>'+mtdMoneda(tot.v)+'</td><td>'+mtdMoneda(tot.a)+'</td>'+
+     '<td>'+FMT.format(Math.round(tot.u))+'</td>'+
+     mtdDelta(tot.a?(tot.v-tot.a)/tot.a:null)+'</tr></tbody>';
+  document.getElementById('mtdTablaProductos').innerHTML=h}
+
+/* ── Datos de ejemplo para abrir el HTML fuera de Apps Script ── */
+function mtdDatosDemo(){
+  var filas=[
+    {sapId:'1001',cliente:'DROGUERÍAS CRUZ VERDE',kam:'Sara Cardona',canal:'Cadenas',
+     realMes:4200000000,realMesAnterior:3900000000,planMes:5100000000,cumplPct:null,
+     realAnio:32000000000,planAnio:41000000000},
+    {sapId:'1002',cliente:'FARMATODO',kam:'Manuel Camargo',canal:'Cadenas',
+     realMes:3100000000,realMesAnterior:3300000000,planMes:3200000000,cumplPct:null,
+     realAnio:24000000000,planAnio:25000000000},
+    {sapId:'1003',cliente:'BELLA PIEL',kam:'Sara Cardona',canal:'Independientes',
+     realMes:1800000000,realMesAnterior:1500000000,planMes:2600000000,cumplPct:null,
+     realAnio:14000000000,planAnio:20000000000}];
+  filas.forEach(function(f){f.cumplPct=f.planMes?f.realMes/f.planMes:null});
+  var prods=[
+    {nombre:'FP FUSION WATER MAGIC SPF50 50ML',ventaMes:2100000000,ventaMesAnterior:1700000000,unidades:52000},
+    {nombre:'ISDIN REPARADOR LABIAL STICK 4G',ventaMes:900000000,ventaMesAnterior:1050000000,unidades:31000},
+    {nombre:'ISDINCEUTICS MELACLEAR ADVANCE',ventaMes:640000000,ventaMesAnterior:640000000,unidades:4200}];
+  prods.forEach(function(p){p.deltaVsPctMesAnterior=p.ventaMesAnterior?
+    (p.ventaMes-p.ventaMesAnterior)/p.ventaMesAnterior:null});
+  var t=filas.reduce(function(a,f){a.realMes+=f.realMes;a.planMes+=f.planMes;
+    a.realAnio+=f.realAnio;a.planAnio+=f.planAnio;return a},
+    {realMes:0,planMes:0,realAnio:0,planAnio:0});
+  t.cumplPct=t.realMes/t.planMes;
+  return{cumplimiento:{filas:filas,totales:t},productos:prods,
+    meta:{actualizadoEn:new Date().toISOString(),totalFilasClientes:filas.length,
+      totalFilasProductos:prods.length}}}
+</script>

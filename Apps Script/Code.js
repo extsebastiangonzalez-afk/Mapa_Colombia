@@ -50,7 +50,9 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  return HtmlService.createHtmlOutputFromFile('Index')
+  // createTemplateFromFile + evaluate(): obligatorio para que se procesen los
+  // <?!= include('...') ?> con los que Index.html ensambla Estilos y los Js*.
+  return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('Cobertura Estratégica · ISDIN Colombia')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -242,6 +244,43 @@ function getDetalleAgregadoJson(posIdsCsv) {
  *
  * Devuelve: { sku, pdv: { 'POS_ID': [[iMes, units, amount], ...] } }
  */
+/**
+ * Cantidad de SKUs distintos vendidos (histórico, no filtrado por período) por cada
+ * PDV de la lista. Usado por la tabla ampliada del panel de brick (columna "#SKUs"):
+ * mismo agrupamiento por fragmento que getDetalleAgregadoJson(), pero devuelve un
+ * conteo por PDV en vez de sumar todo junto.
+ */
+function getConteoSkuJson(posIdsCsv) {
+  var lista = (posIdsCsv || '').split(',').map(normalizarPos_).filter(Boolean);
+  if (!lista.length) return JSON.stringify({ conteo: {} });
+
+  var vistos = {}, unicos = [];
+  lista.forEach(function(p) { if (!vistos[p]) { vistos[p] = 1; unicos.push(p); } });
+
+  var indice  = JSON.parse(leerArchivoDrive_('so_indice.json'));
+  var porFrag = {};
+  unicos.forEach(function(pos) {
+    var entrada = indice.pdv ? indice.pdv[pos] : undefined;
+    if (entrada === undefined) return;
+    var f = fragDePdv_(entrada);
+    if (isNaN(f)) return;
+    if (!porFrag[f]) porFrag[f] = [];
+    porFrag[f].push(pos);
+  });
+
+  var conteo = {};
+  Object.keys(porFrag).forEach(function(f) {
+    var datos = pdvsDeFragmento_(JSON.parse(
+      leerArchivoDrive_(nombreFrag_('so_detalle_', parseInt(f, 10)))));
+    porFrag[f].forEach(function(pos) {
+      var skus = datos[pos];
+      conteo[pos] = skus ? Object.keys(skus).length : 0;
+    });
+  });
+
+  return JSON.stringify({ conteo: conteo });
+}
+
 function getDistribucionSkuJson(sku) {
   var s = (sku || '').toString().trim();
   if (!s) return JSON.stringify({ sku: '', pdv: {} });
@@ -505,6 +544,11 @@ function probarConexion() {
 }
 
 function verDiagnostico() { Logger.log(getDiagnosticoJson()); }
+
+/** Inserta otro archivo del proyecto en la plantilla: <?!= include('JsMapa') ?>. */
+function include(nombre) {
+  return HtmlService.createHtmlOutputFromFile(nombre).getContent();
+}
 
 /* ============================================================
  * Utilidades
